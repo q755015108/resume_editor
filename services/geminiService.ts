@@ -1,5 +1,5 @@
 
-const API_BASE_URL = 'https://yunwu.ai/v1beta';
+const API_BASE_URL = 'https://yunwu.ai/v1beta'; // 注意：你提供的地址有双斜杠，已修正
 const MODEL_ID = 'gemini-3-flash-preview';
 
 // 调用 yunwu.ai API
