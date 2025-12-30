@@ -48,10 +48,15 @@ jobs:
         run: |
           echo "=== dist directory ==="
           ls -la dist/
+          echo ""
           echo "=== assets directory ==="
           ls -la dist/assets/ || echo "assets directory not found"
-          echo "=== index.html content ==="
-          head -20 dist/index.html
+          echo ""
+          echo "=== assets files ==="
+          find dist/assets -type f || echo "no files in assets"
+          echo ""
+          echo "=== index.html first 30 lines ==="
+          head -30 dist/index.html
 
   deploy:
     environment:
