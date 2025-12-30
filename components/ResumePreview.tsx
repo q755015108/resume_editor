@@ -9,8 +9,16 @@ interface ResumePreviewProps {
 
 const ResumePreview: React.FC<ResumePreviewProps> = ({ data }) => {
   const getIcon = (name: string, className = "w-4 h-4 text-black") => {
-    const IconComp = (Icons as any)[name] || Icons.FileText;
-    return <IconComp className={className} />;
+    try {
+      const IconComp = (Icons as any)[name];
+      if (IconComp && typeof IconComp === 'function') {
+        return React.createElement(IconComp, { className });
+      }
+      return React.createElement(Icons.FileText, { className });
+    } catch (error) {
+      console.error('Icon error:', error);
+      return React.createElement(Icons.FileText, { className });
+    }
   };
 
   const renderSectionContent = (section: ResumeSection, isDark = false) => {
