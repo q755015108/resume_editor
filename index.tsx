@@ -20,5 +20,12 @@ try {
   );
 } catch (error) {
   console.error('Failed to render app:', error);
-  rootElement.innerHTML = '<div style="padding: 20px; text-align: center;"><h1>加载失败</h1><p>请刷新页面重试</p></div>';
+  // 使用 React 方式渲染错误信息，而不是直接操作 innerHTML
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(
+    <div style={{ padding: '20px', textAlign: 'center' }}>
+      <h1>加载失败</h1>
+      <p>请刷新页面重试</p>
+    </div>
+  );
 }
