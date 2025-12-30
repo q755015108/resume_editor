@@ -131,16 +131,45 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  // 修复问题1和2：缩短 system instruction 和 prompt，将关键指令放在最前面
-  // 防止 Token 挤占和 System Instruction 被忽视
-  const systemInstruction = `只输出 JSON，不要任何其他文字。`;
+  const systemInstruction = `你是一个 JSON 输出器。你的唯一任务是输出有效的 JSON 对象。
+严禁输出任何非 JSON 的文字。
+严禁输出任何 Markdown 标签（如 \`\`\`json\`\`\`、**、# 等）。
+严禁输出任何思考过程、解释、说明、注释或其他文字。
+只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
 
-  // 将关键指令放在最前面，缩短 prompt，移除冗余内容
-  const prompt = `只输出 JSON，不要解释。解析以下简历：
+  const prompt = `你是一个极其精准的简历信息提取引擎。任务：将简历原始文本转换为 JSON。
+要求：
+1. 必须只输出 JSON，严禁输出任何 Markdown 标签（如 \`\`\`json）、解释性文字或思考过程。
+2. 识别个人信息。姓名(name)和求职意向(objective)是固定字段，其他信息放入 items 数组。
+3. 教育经历(education)和工作/项目经历(experience)必须完整。
+4. 所有 ID 使用随机字符串。
 
+待解析文本：
+"""
 ${rawText}
+"""
 
-输出格式：{"personal":{"name":"","objective":"","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[]},"pages":[{"id":"","sections":[]}]}`;
+输出 JSON 结构参考：
+{
+  "personal": { 
+    "name": "姓名", 
+    "objective": "求职意向", 
+    "photo": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop",
+    "items": [
+      { "id": "1", "label": "手机号码", "value": "xxx" },
+      { "id": "2", "label": "电子邮箱", "value": "xxx" }
+    ]
+  },
+  "pages": [
+    {
+      "id": "p1",
+      "sections": [
+        { "id": "s1", "type": "education", "title": "教育背景", "iconName": "GraduationCap", "content": [] },
+        { "id": "s2", "type": "experience", "title": "实习经历", "iconName": "Briefcase", "content": [] }
+      ]
+    }
+  ]
+}`;
 
   try {
     // 检查 API Key
