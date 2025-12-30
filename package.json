@@ -17,9 +17,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/ai-resume-builder.git"
+    "url": "https://github.com/q755015108/resume_editor.git"
   },
-  "homepage": "https://your-username.github.io/ai-resume-builder",
+  "homepage": "https://q755015108.github.io/resume_editor",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
