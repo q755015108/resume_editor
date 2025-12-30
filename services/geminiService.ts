@@ -131,45 +131,16 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  const systemInstruction = `你是一个 JSON 输出器。你的唯一任务是输出有效的 JSON 对象。
-严禁输出任何非 JSON 的文字。
-严禁输出任何 Markdown 标签（如 \`\`\`json\`\`\`、**、# 等）。
-严禁输出任何思考过程、解释、说明、注释或其他文字。
-只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
+  // 修复问题1和2：缩短 system instruction 和 prompt，将关键指令放在最前面
+  // 防止 Token 挤占和 System Instruction 被忽视
+  const systemInstruction = `只输出 JSON，不要任何其他文字。`;
 
-  const prompt = `你是一个极其精准的简历信息提取引擎。任务：将简历原始文本转换为 JSON。
-要求：
-1. 必须只输出 JSON，严禁输出任何 Markdown 标签（如 \`\`\`json）、解释性文字或思考过程。
-2. 识别个人信息。姓名(name)和求职意向(objective)是固定字段，其他信息放入 items 数组。
-3. 教育经历(education)和工作/项目经历(experience)必须完整。
-4. 所有 ID 使用随机字符串。
+  // 将关键指令放在最前面，缩短 prompt，移除冗余内容
+  const prompt = `只输出 JSON，不要解释。解析以下简历：
 
-待解析文本：
-"""
 ${rawText}
-"""
 
-输出 JSON 结构参考：
-{
-  "personal": { 
-    "name": "姓名", 
-    "objective": "求职意向", 
-    "photo": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop",
-    "items": [
-      { "id": "1", "label": "手机号码", "value": "xxx" },
-      { "id": "2", "label": "电子邮箱", "value": "xxx" }
-    ]
-  },
-  "pages": [
-    {
-      "id": "p1",
-      "sections": [
-        { "id": "s1", "type": "education", "title": "教育背景", "iconName": "GraduationCap", "content": [] },
-        { "id": "s2", "type": "experience", "title": "实习经历", "iconName": "Briefcase", "content": [] }
-      ]
-    }
-  ]
-}`;
+输出格式：{"personal":{"name":"","objective":"","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[]},"pages":[{"id":"","sections":[]}]}`;
 
   try {
     // 检查 API Key
@@ -179,17 +150,14 @@ ${rawText}
     
     console.log("Calling Yunwu AI with model:", MODEL_ID);
     // 强制使用 JSON 格式输出
-    // temperature: 0.1 - 接近于 0，让模型尽可能死板地遵循指令，防止自我发挥或修改用户信息
-    // responseMimeType: "application/json" - 强制输出合法 JSON，配合 Prompt Schema 保证 JSON.parse 100% 成功
-    // topP: 0.95, topK: 64 - 默认值
-    // maxOutputTokens: 8192 - 输出长度限制
-    // thinkingBudget: 0 - 禁用思考过程，强制直接输出 JSON
+    // 修复问题1：增加 maxOutputTokens 到 16384，防止 Token 挤占导致 JSON 被截断
+    // 修复问题2：使用更严格的参数，确保 System Instruction 被遵守
     const responseText = await callYunwuAI(prompt, systemInstruction, {
       temperature: 0.1,         // 接近 0，死板遵循指令，防止自我发挥
       responseMimeType: "application/json",  // 强制输出合法 JSON
       topP: 0.95,               // 默认值
       topK: 64,                 // 默认值
-      maxOutputTokens: 8192,    // 输出长度限制
+      maxOutputTokens: 16384,   // 增加到 16384，防止 Token 挤占导致 JSON 被截断
       thinkingBudget: 0         // 禁用思考过程，强制直接输出
     });
 
@@ -198,6 +166,7 @@ ${rawText}
     }
 
     // JSON 提取逻辑：使用正则表达式从原始响应中提取 { 和 } 之间（或 [ 和 ] 之间）的内容
+    // 修复问题3：改进提取逻辑，即使没有 { 也能处理
     function extractJSON(text: string): string | null {
       // 方法1: 提取 { 和 } 之间的内容（JSON 对象）
       const jsonObjectMatch = text.match(/\{[\s\S]*\}/);
@@ -215,6 +184,34 @@ ${rawText}
         const extracted = jsonArrayMatch[0];
         if (extracted.length > 10) {
           return extracted;
+        }
+      }
+      
+      // 方法3: 如果响应被截断（以 "Fi..." 结尾），尝试找到最后一个完整的 JSON 片段
+      // 检查是否以不完整的 JSON 结尾
+      if (text.trim().endsWith('...') || text.trim().endsWith('Fi')) {
+        // 尝试找到最后一个完整的 JSON 对象
+        const lastBrace = text.lastIndexOf('}');
+        if (lastBrace !== -1) {
+          // 从后往前找匹配的 {
+          let braceCount = 0;
+          let startIdx = lastBrace;
+          for (let i = lastBrace; i >= 0; i--) {
+            if (text[i] === '}') braceCount++;
+            if (text[i] === '{') {
+              braceCount--;
+              if (braceCount === 0) {
+                startIdx = i;
+                break;
+              }
+            }
+          }
+          if (startIdx < lastBrace) {
+            const extracted = text.substring(startIdx, lastBrace + 1);
+            if (extracted.includes('"') && extracted.length > 10) {
+              return extracted;
+            }
+          }
         }
       }
       
@@ -358,9 +355,16 @@ ${rawText}
               }
             }
             
-            // 如果还是找不到，抛出错误
+            // 如果还是找不到，检查是否是 Token 挤占导致的截断
             if (!jsonText.startsWith('{') || !jsonText.endsWith('}')) {
-              throw new Error(`API 响应中没有找到有效的 JSON 对象。响应内容: ${responseText.substring(0, 1000)}...`);
+              // 修复问题3：如果响应被截断，提供更详细的错误信息
+              const responsePreview = responseText.substring(0, 500);
+              const isTruncated = responseText.length >= 16380 || responseText.endsWith('...') || responseText.endsWith('Fi');
+              if (isTruncated) {
+                throw new Error(`API 响应被截断（可能达到 maxOutputTokens 限制）。响应内容: ${responsePreview}...\n建议：增加 maxOutputTokens 或缩短输入文本。`);
+              } else {
+                throw new Error(`API 响应中没有找到有效的 JSON 对象。响应内容: ${responsePreview}...`);
+              }
             }
           }
         }
