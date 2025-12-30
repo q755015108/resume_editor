@@ -95,21 +95,22 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  const systemInstruction = `你是一个简历解析器。你的任务是将简历文本转换为 JSON 格式。你必须只输出有效的 JSON 对象，不要任何解释、说明、代码块标记或其他文字。直接输出 JSON，不要使用 markdown 代码块。`;
+  const systemInstruction = `你是一个简历解析器。你的任务是将简历文本转换为 JSON 格式。你必须只输出有效的 JSON 对象，不要任何解释、说明、代码块标记或其他文字。直接输出 JSON，不要使用 markdown 代码块。输出的第一行必须是 {，最后一行必须是 }。`;
 
-  const prompt = `将以下简历文本转换为 JSON 格式：
+  const prompt = `将以下简历文本转换为 JSON 格式。只输出 JSON，不要任何解释。
 
+简历文本：
 ${rawText}
 
-输出要求：
-- 个人信息：name（姓名）、objective（求职意向）是固定字段，其他信息放入 items 数组，每个项包含 id, label, value
-- 教育经历：type="education", title="教育背景", iconName="GraduationCap", content 包含学校、专业、时间、GPA等
-- 工作经历：type="experience", title="实习经历"或"工作经历", iconName="Briefcase", content 包含 organization, role, period, summary 和 points (subtitle, detail)
-- 所有 ID 使用随机字符串
-- 必须输出有效的 JSON 对象，不要任何其他文字
+要求：
+1. 个人信息：name（姓名）、objective（求职意向）是固定字段，其他信息放入 items 数组，每个项包含 id, label, value
+2. 教育经历：type="education", title="教育背景", iconName="GraduationCap", content 包含学校、专业、时间、GPA等
+3. 工作经历：type="experience", title="实习经历"或"工作经历", iconName="Briefcase", content 包含 organization, role, period, summary 和 points (subtitle, detail)
+4. 所有 ID 使用随机字符串
+5. 必须输出有效的 JSON 对象，第一行必须是 {，最后一行必须是 }
 
-JSON 结构：
-{"personal":{"name":"","objective":"","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[]},"pages":[{"id":"","sections":[]}]}`;
+输出格式示例：
+{"personal":{"name":"张三","objective":"财务助理","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[{"id":"pi-1","label":"手机号码","value":"13000000000"}]},"pages":[{"id":"page-1","sections":[{"id":"sec-1","type":"education","title":"教育背景","iconName":"GraduationCap","content":[]}]}]}`;
 
   try {
     // 检查 API Key
@@ -120,7 +121,7 @@ JSON 结构：
     console.log("Calling Yunwu AI with model:", MODEL_ID);
     const responseText = await callYunwuAI(prompt, systemInstruction, {
       responseMimeType: "application/json",
-      temperature: 0.1
+      temperature: 0  // 降低到 0 以获得更确定性的输出
     });
 
     if (!responseText) {
@@ -130,58 +131,30 @@ JSON 结构：
     // 清理响应文本，提取 JSON 部分
     let jsonText = responseText.trim();
     
-    console.log("Raw API response:", jsonText.substring(0, 300)); // 打印前300个字符用于调试
+    console.log("Raw API response length:", jsonText.length);
+    console.log("Raw API response preview:", jsonText.substring(0, 500)); // 打印前500个字符用于调试
     
     // 方法1: 如果响应被包裹在代码块中，提取出来
     const codeBlockMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
     if (codeBlockMatch) {
       jsonText = codeBlockMatch[1];
     } else {
-      // 方法2: 查找第一个完整的 JSON 对象（从 { 开始到匹配的 } 结束）
-      let braceCount = 0;
-      let startIndex = -1;
+      // 方法2: 使用更智能的 JSON 提取 - 找到所有可能的 JSON 对象，选择最长的
+      const jsonCandidates: string[] = [];
+      
+      // 找到所有 { 的位置
+      const openBraces: number[] = [];
       for (let i = 0; i < jsonText.length; i++) {
         if (jsonText[i] === '{') {
-          if (startIndex === -1) startIndex = i;
-          braceCount++;
-        } else if (jsonText[i] === '}') {
-          braceCount--;
-          if (braceCount === 0 && startIndex !== -1) {
-            jsonText = jsonText.substring(startIndex, i + 1);
-            break;
-          }
+          openBraces.push(i);
         }
       }
       
-      // 方法3: 如果还是找不到，尝试正则匹配（贪婪匹配，找到最长的 JSON 对象）
-      if (startIndex === -1 || braceCount !== 0) {
-        // 从后往前找最后一个 }
-        const lastBraceIndex = jsonText.lastIndexOf('}');
-        if (lastBraceIndex !== -1) {
-          // 从最后一个 } 往前找第一个 {
-          const firstBraceIndex = jsonText.lastIndexOf('{', lastBraceIndex);
-          if (firstBraceIndex !== -1) {
-            jsonText = jsonText.substring(firstBraceIndex, lastBraceIndex + 1);
-          }
-        }
-      }
-    }
-    
-    // 移除可能的 markdown 格式标记和多余文本
-    jsonText = jsonText.replace(/^\*\*.*?\*\*\s*/g, ''); // 移除 **Building** 这样的标记
-    jsonText = jsonText.replace(/^```json\s*/g, ''); // 移除开头的 ```json
-    jsonText = jsonText.replace(/```\s*$/g, ''); // 移除结尾的 ```
-    jsonText = jsonText.trim();
-    
-    // 如果还是没有找到 JSON，尝试从第一个 { 开始提取
-    if (!jsonText.startsWith('{')) {
-      const firstBrace = jsonText.indexOf('{');
-      if (firstBrace !== -1) {
-        jsonText = jsonText.substring(firstBrace);
-        // 找到最后一个匹配的 }
+      // 对每个 {，尝试找到匹配的 }
+      for (const startIndex of openBraces) {
         let braceCount = 0;
         let endIndex = -1;
-        for (let i = 0; i < jsonText.length; i++) {
+        for (let i = startIndex; i < jsonText.length; i++) {
           if (jsonText[i] === '{') braceCount++;
           if (jsonText[i] === '}') {
             braceCount--;
@@ -192,19 +165,49 @@ JSON 结构：
           }
         }
         if (endIndex !== -1) {
-          jsonText = jsonText.substring(0, endIndex + 1);
+          const candidate = jsonText.substring(startIndex, endIndex + 1);
+          // 验证是否是有效的 JSON（至少包含引号，说明是 JSON）
+          if (candidate.includes('"') && candidate.length > 10) {
+            jsonCandidates.push(candidate);
+          }
+        }
+      }
+      
+      // 选择最长的候选 JSON（通常是最完整的）
+      if (jsonCandidates.length > 0) {
+        jsonCandidates.sort((a, b) => b.length - a.length);
+        jsonText = jsonCandidates[0];
+      } else {
+        // 如果还是找不到，尝试从第一个 { 到最后一个 }
+        const firstBrace = jsonText.indexOf('{');
+        const lastBrace = jsonText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          jsonText = jsonText.substring(firstBrace, lastBrace + 1);
         }
       }
     }
+    
+    // 移除可能的 markdown 格式标记和多余文本
+    jsonText = jsonText.replace(/^\*\*.*?\*\*\s*/g, ''); // 移除 **Building** 这样的标记
+    jsonText = jsonText.replace(/^```json\s*/g, ''); // 移除开头的 ```json
+    jsonText = jsonText.replace(/```\s*$/g, ''); // 移除结尾的 ```
+    jsonText = jsonText.trim();
 
-    console.log("Extracted JSON text:", jsonText.substring(0, 500)); // 打印前500个字符用于调试
+    console.log("Extracted JSON text length:", jsonText.length);
+    console.log("Extracted JSON text preview:", jsonText.substring(0, 500)); // 打印前500个字符用于调试
 
     // 验证是否是有效的 JSON
     if (!jsonText.startsWith('{') || !jsonText.endsWith('}')) {
-      throw new Error(`API 返回的不是有效的 JSON 格式。返回内容: ${responseText.substring(0, 300)}...`);
+      throw new Error(`API 返回的不是有效的 JSON 格式。返回内容: ${responseText.substring(0, 500)}...`);
     }
 
-    const result = JSON.parse(jsonText);
+    // 尝试解析 JSON，如果失败会抛出更详细的错误
+    let result;
+    try {
+      result = JSON.parse(jsonText);
+    } catch (parseError: any) {
+      throw new Error(`JSON 解析失败: ${parseError.message}。提取的文本: ${jsonText.substring(0, 200)}...`);
+    }
     return result;
   } catch (error: any) {
     console.error("AI Parse Error Details:", error);
