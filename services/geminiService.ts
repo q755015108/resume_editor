@@ -70,6 +70,12 @@ export async function parseResumeFromText(rawText: string): Promise<any> {
   `;
 
   try {
+    // 检查 API Key
+    if (!process.env.API_KEY) {
+      throw new Error("API Key is missing. Please check environment variable GEMINI_API_KEY.");
+    }
+    
+    console.log("Calling Gemini API with model: gemini-3-pro-preview");
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: prompt,
@@ -79,10 +85,32 @@ export async function parseResumeFromText(rawText: string): Promise<any> {
       },
     });
 
-    const result = JSON.parse(response.text || "{}");
+    if (!response.text) {
+      throw new Error("Gemini API returned empty response");
+    }
+
+    const result = JSON.parse(response.text);
     return result;
-  } catch (error) {
-    console.error("AI Parse Error:", error);
-    throw error;
+  } catch (error: any) {
+    console.error("AI Parse Error Details:", error);
+    
+    // 提取详细的错误信息
+    let errorMessage = "解析失败，请检查文本内容或 API Key 设置。";
+    
+    if (error?.message) {
+      errorMessage += ` 错误详情: ${error.message}`;
+    }
+    
+    if (error?.status || error?.statusCode) {
+      errorMessage += ` 状态码: ${error.status || error.statusCode}`;
+    }
+    
+    if (error?.response) {
+      errorMessage += ` 响应: ${JSON.stringify(error.response)}`;
+    }
+    
+    console.error("Full error object:", JSON.stringify(error, null, 2));
+    
+    throw new Error(errorMessage);
   }
 }

@@ -34,9 +34,10 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
         setIsMagicImportOpen(false);
         setRawText('');
       }
-    } catch (err) {
-      setParseError('解析失败，请检查文本内容或 API Key 设置。');
-      console.error(err);
+    } catch (err: any) {
+      const errorMsg = err?.message || '解析失败，请检查文本内容或 API Key 设置。';
+      setParseError(errorMsg);
+      console.error("Parse error details:", err);
     } finally {
       setIsParsing(false);
     }
