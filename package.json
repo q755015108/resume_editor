@@ -1,0 +1,41 @@
+{
+  "name": "ai-resume-builder",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "一个专业的、可编辑的简历构建工具，支持 AI 驱动的内容优化（基于 Google Gemini）",
+  "keywords": [
+    "resume",
+    "cv",
+    "resume-builder",
+    "ai",
+    "gemini",
+    "react",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/ai-resume-builder.git"
+  },
+  "homepage": "https://your-username.github.io/ai-resume-builder",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && gh-pages -d dist"
+  },
+  "dependencies": {
+    "react": "^19.2.3",
+    "@google/genai": "^1.34.0",
+    "lucide-react": "^0.562.0",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
