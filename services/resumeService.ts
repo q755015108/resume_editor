@@ -4,23 +4,22 @@ const API_KEY = 'sk-JKj8yYYz1tXcUdug3Tn1ubd1esBwKaLmNMMdBHZT7Y4MCwP8';
 
 // 调用 API 生成简历内容
 export async function generateResumeContent(userInput: string): Promise<any> {
-  const systemInstruction = `你是一个专业的简历生成助手。根据用户提供的基本信息，生成一份完整的简历数据。
+  const systemInstruction = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本，将其转换为 JSON 结构。
 
-要求：
-1. 必须只输出有效的 JSON 格式，不要包含任何 Markdown 标签或解释性文字
-2. 根据用户提供的信息，智能填充以下字段：
-   - 个人信息（姓名、求职意向、联系方式等）
-   - 教育背景（学校、专业、时间、GPA等）
-   - 工作/实习经历（公司、职位、时间、工作内容等）
-3. 如果用户信息不足，可以合理补充一些示例内容
-4. 所有 ID 使用随机字符串
-5. 工作经历要包含详细的要点描述
+规则：
+1. 识别个人信息。注意：姓名(name)和求职意向(objective)是固定字段，其他信息（如电话、邮箱、出生地、生日等）请全部放入 items 数组中，每个项包含 id, label, value。
+2. 教育经历(education)：提取学校、专业、时间、GPA等。
+3. 工作/项目经历(experience)：必须包含 organization, role, period, summary 和 points (带有 subtitle 和 detail)。
+4. 必须输出合法 JSON，所有 ID 使用随机字符串。
+5. 严禁输出任何 Markdown 标签（如 \`\`\`json、**、# 等）。
+6. 严禁输出任何解释性文字、思考过程或注释。
+7. 只输出纯 JSON，第一行必须是 {，最后一行必须是 }。
 
-输出 JSON 结构：
+输出 JSON 结构参考：
 {
-  "personal": {
-    "name": "姓名",
-    "objective": "求职意向",
+  "personal": { 
+    "name": "姓名", 
+    "objective": "求职意向", 
     "photo": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop",
     "items": [
       { "id": "1", "label": "手机号码", "value": "xxx" },
@@ -31,11 +30,11 @@ export async function generateResumeContent(userInput: string): Promise<any> {
     {
       "id": "p1",
       "sections": [
-        {
-          "id": "s1",
-          "type": "education",
-          "title": "教育背景",
-          "iconName": "GraduationCap",
+        { 
+          "id": "s1", 
+          "type": "education", 
+          "title": "教育背景", 
+          "iconName": "GraduationCap", 
           "content": [
             {
               "id": "e1",
@@ -48,11 +47,11 @@ export async function generateResumeContent(userInput: string): Promise<any> {
             }
           ]
         },
-        {
-          "id": "s2",
-          "type": "experience",
-          "title": "工作经历",
-          "iconName": "Briefcase",
+        { 
+          "id": "s2", 
+          "type": "experience", 
+          "title": "工作经历", 
+          "iconName": "Briefcase", 
           "content": [
             {
               "id": "exp1",
@@ -88,15 +87,16 @@ export async function generateResumeContent(userInput: string): Promise<any> {
         role: 'user',
         parts: [
           {
-            text: `请根据以下信息生成简历：\n\n${userInput}`
+            text: `文本内容：\n"""\n${userInput}\n"""\n\n请按照规则提取并转换为 JSON 格式。`
           }
         ]
       }
     ],
     generationConfig: {
-      temperature: 0.7,
+      temperature: 0.1,  // 降低温度，更严格遵循指令
       topP: 0.95,
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',  // 强制 JSON 格式
+      maxOutputTokens: 16384  // 确保有足够空间输出完整 JSON
     }
   };
 
