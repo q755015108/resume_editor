@@ -177,7 +177,7 @@ ${rawText}
       throw new Error("API Key is missing. Please check environment variable GEMINI_API_KEY.");
     }
     
-    console.log("Calling Yunwu AI with model:", MODEL_ID);
+    console.log("Calling Yunwu AI with API:", API_URL);
     // 强制使用 JSON 格式输出
     // 修复问题1：增加 maxOutputTokens 到 16384，防止 Token 挤占导致 JSON 被截断
     // 修复问题2：使用更严格的参数，确保 System Instruction 被遵守
