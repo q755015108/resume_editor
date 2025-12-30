@@ -2,10 +2,22 @@
 const API_BASE_URL = 'https://yunwu.ai/v1beta'; // 注意：你提供的地址有双斜杠，已修正
 const MODEL_ID = 'gemini-3-flash-preview';
 
+// Gemini API 支持的 generationConfig 参数：
+// - temperature: 0-2，控制随机性，0=确定性，2=随机性
+// - topP: 0-1，核采样，控制多样性
+// - topK: 1-40，Top-K 采样，限制候选词数量
+// - maxOutputTokens: 1-8192，最大输出 token 数（某些模型支持更大）
+// - responseMimeType: "application/json" 等，强制输出格式
+// - stopSequences: 字符串数组，停止序列
+
 // 调用 yunwu.ai API
 async function callYunwuAI(prompt: string, systemInstruction?: string, options?: {
-  temperature?: number;
-  responseMimeType?: string;
+  temperature?: number;        // 0-2，默认 0（确定性输出）
+  topP?: number;               // 0-1，核采样
+  topK?: number;                // 1-40，Top-K 采样
+  maxOutputTokens?: number;    // 1-8192 或更大，最大输出长度
+  responseMimeType?: string;   // "application/json" 等
+  stopSequences?: string[];    // 停止序列数组
 }) {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -30,17 +42,35 @@ async function callYunwuAI(prompt: string, systemInstruction?: string, options?:
     };
   }
 
+  // 初始化 generationConfig
+  requestBody.generationConfig = {};
+
+  // 设置所有可选参数
   if (options?.temperature !== undefined) {
-    requestBody.generationConfig = {
-      temperature: options.temperature
-    };
+    requestBody.generationConfig.temperature = options.temperature;
+  }
+
+  if (options?.topP !== undefined) {
+    requestBody.generationConfig.topP = options.topP;
+  }
+
+  if (options?.topK !== undefined) {
+    requestBody.generationConfig.topK = options.topK;
+  }
+
+  if (options?.maxOutputTokens !== undefined) {
+    requestBody.generationConfig.maxOutputTokens = options.maxOutputTokens;
+  } else {
+    // 默认使用较大的输出长度，确保能输出完整 JSON
+    requestBody.generationConfig.maxOutputTokens = 16384; // 增加到 16384
   }
 
   if (options?.responseMimeType) {
-    if (!requestBody.generationConfig) {
-      requestBody.generationConfig = {};
-    }
     requestBody.generationConfig.responseMimeType = options.responseMimeType;
+  }
+
+  if (options?.stopSequences && options.stopSequences.length > 0) {
+    requestBody.generationConfig.stopSequences = options.stopSequences;
   }
 
   const response = await fetch(url, {
@@ -95,7 +125,7 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  const systemInstruction = `你是一个极其精准的简历信息提取引擎。你的任务是分析简历文本并转换为 JSON 结构。只输出 JSON，不要任何解释文字。`;
+  const systemInstruction = `你是一个 JSON 输出器。你的唯一任务是输出有效的 JSON 对象。禁止输出任何解释、说明、注释或其他文字。只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
 
   const prompt = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本，将其转换为 JSON 结构。
 
@@ -142,7 +172,10 @@ ${rawText}
     // 强制使用 JSON 格式输出
     const responseText = await callYunwuAI(prompt, systemInstruction, {
       responseMimeType: "application/json",
-      temperature: 0  // 最低温度，确保输出确定性
+      temperature: 0,           // 最低温度，确保输出确定性
+      maxOutputTokens: 16384,  // 增加输出长度到 16384，确保能输出完整 JSON
+      topP: 0.95,              // 核采样，提高输出质量
+      topK: 40                 // Top-K 采样
     });
 
     if (!responseText) {
