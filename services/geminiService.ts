@@ -166,9 +166,22 @@ ${rawText}
         }
         if (endIndex !== -1) {
           const candidate = jsonText.substring(startIndex, endIndex + 1);
-          // 验证是否是有效的 JSON（至少包含引号，说明是 JSON）
-          if (candidate.includes('"') && candidate.length > 10) {
-            jsonCandidates.push(candidate);
+          // 验证是否是有效的 JSON
+          // 1. 必须包含引号（说明是 JSON 格式）
+          // 2. 不能包含占位符如 {...} 或 ...
+          // 3. 长度要足够（至少 50 字符）
+          if (candidate.includes('"') && 
+              candidate.length > 50 &&
+              !candidate.includes('{...}') &&
+              !candidate.match(/\{[^}]*\.\.\.[^}]*\}/) &&
+              !candidate.match(/\.\.\.[^}]*\}/)) {
+            // 尝试预解析，确保是有效的 JSON
+            try {
+              JSON.parse(candidate);
+              jsonCandidates.push(candidate);
+            } catch (e) {
+              // 不是有效的 JSON，跳过
+            }
           }
         }
       }
@@ -192,13 +205,22 @@ ${rawText}
     jsonText = jsonText.replace(/^```json\s*/g, ''); // 移除开头的 ```json
     jsonText = jsonText.replace(/```\s*$/g, ''); // 移除结尾的 ```
     jsonText = jsonText.trim();
+    
+    // 移除占位符（如 {...} 或 ...）
+    jsonText = jsonText.replace(/\{[^}]*\.\.\.[^}]*\}/g, '{}'); // 替换 {...} 为 {}
+    jsonText = jsonText.replace(/\.\.\.[^}]*\}/g, '}'); // 移除 ...} 这样的占位符
 
     console.log("Extracted JSON text length:", jsonText.length);
-    console.log("Extracted JSON text preview:", jsonText.substring(0, 500)); // 打印前500个字符用于调试
+    console.log("Extracted JSON text preview:", jsonText.substring(0, 1000)); // 打印前1000个字符用于调试
 
     // 验证是否是有效的 JSON
     if (!jsonText.startsWith('{') || !jsonText.endsWith('}')) {
       throw new Error(`API 返回的不是有效的 JSON 格式。返回内容: ${responseText.substring(0, 500)}...`);
+    }
+    
+    // 验证 JSON 格式：检查基本的 JSON 结构
+    if (!jsonText.includes('"personal"') || !jsonText.includes('"pages"')) {
+      console.warn("警告：提取的 JSON 可能不完整，缺少必要的字段");
     }
 
     // 尝试解析 JSON，如果失败会抛出更详细的错误
@@ -206,7 +228,31 @@ ${rawText}
     try {
       result = JSON.parse(jsonText);
     } catch (parseError: any) {
-      throw new Error(`JSON 解析失败: ${parseError.message}。提取的文本: ${jsonText.substring(0, 200)}...`);
+      // 如果解析失败，尝试修复常见的 JSON 错误
+      let fixedJson = jsonText;
+      
+      // 尝试修复常见的 JSON 错误
+      // 1. 移除尾随逗号
+      fixedJson = fixedJson.replace(/,(\s*[}\]])/g, '$1');
+      
+      // 2. 确保字符串值被正确引用（如果可能）
+      // 这里不做太多修复，因为可能会破坏有效的 JSON
+      
+      try {
+        result = JSON.parse(fixedJson);
+        console.log("JSON 修复成功");
+      } catch (fixError: any) {
+        // 如果修复后还是失败，显示详细的错误信息
+        const errorPosition = parseError.message.match(/position (\d+)/);
+        if (errorPosition) {
+          const pos = parseInt(errorPosition[1]);
+          const start = Math.max(0, pos - 50);
+          const end = Math.min(jsonText.length, pos + 50);
+          throw new Error(`JSON 解析失败: ${parseError.message}。错误位置附近的文本: ...${jsonText.substring(start, end)}...`);
+        } else {
+          throw new Error(`JSON 解析失败: ${parseError.message}。提取的文本前200字符: ${jsonText.substring(0, 200)}...`);
+        }
+      }
     }
     return result;
   } catch (error: any) {
