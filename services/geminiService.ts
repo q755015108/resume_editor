@@ -131,18 +131,17 @@ export async function parseResumeFromText(rawText: string): Promise<any> {
 严禁输出任何思考过程、解释、说明、注释或其他文字。
 只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
 
-  const prompt = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本，将其转换为 JSON 结构。
+  const prompt = `你是一个极其精准的简历信息提取引擎。任务：将简历原始文本转换为 JSON。
+要求：
+1. 必须只输出 JSON，严禁输出任何 Markdown 标签（如 \`\`\`json）、解释性文字或思考过程。
+2. 识别个人信息。姓名(name)和求职意向(objective)是固定字段，其他信息放入 items 数组。
+3. 教育经历(education)和工作/项目经历(experience)必须完整。
+4. 所有 ID 使用随机字符串。
 
-文本内容：
+待解析文本：
 """
 ${rawText}
 """
-
-规则：
-1. 识别个人信息。注意：姓名(name)和求职意向(objective)是固定字段，其他信息（如电话、邮箱、出生地、生日等）请全部放入 items 数组中，每个项包含 id, label, value。
-2. 教育经历(education)：提取学校、专业、时间、GPA等。
-3. 工作/项目经历(experience)：必须包含 organization, role, period, summary 和 points (带有 subtitle 和 detail)。
-4. 必须输出合法 JSON，所有 ID 使用随机字符串。
 
 输出 JSON 结构参考：
 {
