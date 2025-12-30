@@ -95,19 +95,21 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  const prompt = `请将以下简历文本转换为 JSON 格式。只输出 JSON，不要任何解释或说明文字。
+  const systemInstruction = `你是一个简历解析器。你的任务是将简历文本转换为 JSON 格式。你必须只输出有效的 JSON 对象，不要任何解释、说明、代码块标记或其他文字。直接输出 JSON，不要使用 markdown 代码块。`;
 
-简历文本：
+  const prompt = `将以下简历文本转换为 JSON 格式：
+
 ${rawText}
 
-要求：
-1. 个人信息：姓名(name)、求职意向(objective)是固定字段，其他信息放入 items 数组
-2. 教育经历(education)：学校、专业、时间、GPA等
-3. 工作经历(experience)：organization, role, period, summary 和 points (subtitle, detail)
-4. 只输出 JSON 对象，不要任何其他文字
+输出要求：
+- 个人信息：name（姓名）、objective（求职意向）是固定字段，其他信息放入 items 数组，每个项包含 id, label, value
+- 教育经历：type="education", title="教育背景", iconName="GraduationCap", content 包含学校、专业、时间、GPA等
+- 工作经历：type="experience", title="实习经历"或"工作经历", iconName="Briefcase", content 包含 organization, role, period, summary 和 points (subtitle, detail)
+- 所有 ID 使用随机字符串
+- 必须输出有效的 JSON 对象，不要任何其他文字
 
-输出格式：
-{"personal":{"name":"姓名","objective":"求职意向","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[{"id":"1","label":"手机号码","value":"xxx"}]},"pages":[{"id":"p1","sections":[{"id":"s1","type":"education","title":"教育背景","iconName":"GraduationCap","content":[]}]}]}`;
+JSON 结构：
+{"personal":{"name":"","objective":"","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[]},"pages":[{"id":"","sections":[]}]}`;
 
   try {
     // 检查 API Key
@@ -116,7 +118,7 @@ ${rawText}
     }
     
     console.log("Calling Yunwu AI with model:", MODEL_ID);
-    const responseText = await callYunwuAI(prompt, undefined, {
+    const responseText = await callYunwuAI(prompt, systemInstruction, {
       responseMimeType: "application/json",
       temperature: 0.1
     });
@@ -127,6 +129,8 @@ ${rawText}
 
     // 清理响应文本，提取 JSON 部分
     let jsonText = responseText.trim();
+    
+    console.log("Raw API response:", jsonText.substring(0, 300)); // 打印前300个字符用于调试
     
     // 方法1: 如果响应被包裹在代码块中，提取出来
     const codeBlockMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
@@ -149,11 +153,16 @@ ${rawText}
         }
       }
       
-      // 方法3: 如果还是找不到，尝试正则匹配
+      // 方法3: 如果还是找不到，尝试正则匹配（贪婪匹配，找到最长的 JSON 对象）
       if (startIndex === -1 || braceCount !== 0) {
-        const jsonObjectMatch = jsonText.match(/\{[\s\S]*\}/);
-        if (jsonObjectMatch) {
-          jsonText = jsonObjectMatch[0];
+        // 从后往前找最后一个 }
+        const lastBraceIndex = jsonText.lastIndexOf('}');
+        if (lastBraceIndex !== -1) {
+          // 从最后一个 } 往前找第一个 {
+          const firstBraceIndex = jsonText.lastIndexOf('{', lastBraceIndex);
+          if (firstBraceIndex !== -1) {
+            jsonText = jsonText.substring(firstBraceIndex, lastBraceIndex + 1);
+          }
         }
       }
     }
@@ -162,15 +171,37 @@ ${rawText}
     jsonText = jsonText.replace(/^\*\*.*?\*\*\s*/g, ''); // 移除 **Building** 这样的标记
     jsonText = jsonText.replace(/^```json\s*/g, ''); // 移除开头的 ```json
     jsonText = jsonText.replace(/```\s*$/g, ''); // 移除结尾的 ```
-    jsonText = jsonText.replace(/^[^{]*/, ''); // 移除 JSON 对象之前的所有文本
-    jsonText = jsonText.replace(/[^}]*$/, ''); // 移除 JSON 对象之后的所有文本
     jsonText = jsonText.trim();
+    
+    // 如果还是没有找到 JSON，尝试从第一个 { 开始提取
+    if (!jsonText.startsWith('{')) {
+      const firstBrace = jsonText.indexOf('{');
+      if (firstBrace !== -1) {
+        jsonText = jsonText.substring(firstBrace);
+        // 找到最后一个匹配的 }
+        let braceCount = 0;
+        let endIndex = -1;
+        for (let i = 0; i < jsonText.length; i++) {
+          if (jsonText[i] === '{') braceCount++;
+          if (jsonText[i] === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+              endIndex = i;
+              break;
+            }
+          }
+        }
+        if (endIndex !== -1) {
+          jsonText = jsonText.substring(0, endIndex + 1);
+        }
+      }
+    }
 
     console.log("Extracted JSON text:", jsonText.substring(0, 500)); // 打印前500个字符用于调试
 
     // 验证是否是有效的 JSON
     if (!jsonText.startsWith('{') || !jsonText.endsWith('}')) {
-      throw new Error(`API 返回的不是有效的 JSON 格式。返回内容: ${responseText.substring(0, 200)}...`);
+      throw new Error(`API 返回的不是有效的 JSON 格式。返回内容: ${responseText.substring(0, 300)}...`);
     }
 
     const result = JSON.parse(jsonText);
