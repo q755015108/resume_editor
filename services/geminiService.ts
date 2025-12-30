@@ -125,7 +125,11 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  const systemInstruction = `你是一个 JSON 输出器。你的唯一任务是输出有效的 JSON 对象。禁止输出任何解释、说明、注释或其他文字。只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
+  const systemInstruction = `你是一个 JSON 输出器。你的唯一任务是输出有效的 JSON 对象。
+严禁输出任何非 JSON 的文字。
+严禁输出任何 Markdown 标签（如 \`\`\`json\`\`\`、**、# 等）。
+严禁输出任何思考过程、解释、说明、注释或其他文字。
+只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
 
   const prompt = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本，将其转换为 JSON 结构。
 
@@ -186,11 +190,35 @@ ${rawText}
       throw new Error("API returned empty response");
     }
 
-    // 清理响应文本，提取 JSON 部分
+    // JSON 提取逻辑：使用正则表达式从原始响应中提取 { 和 } 之间（或 [ 和 ] 之间）的内容
+    function extractJSON(text: string): string | null {
+      // 方法1: 提取 { 和 } 之间的内容（JSON 对象）
+      const jsonObjectMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonObjectMatch) {
+        const extracted = jsonObjectMatch[0];
+        // 验证是否是有效的 JSON（至少包含引号）
+        if (extracted.includes('"') && extracted.length > 10) {
+          return extracted;
+        }
+      }
+      
+      // 方法2: 提取 [ 和 ] 之间的内容（JSON 数组）
+      const jsonArrayMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonArrayMatch) {
+        const extracted = jsonArrayMatch[0];
+        if (extracted.length > 10) {
+          return extracted;
+        }
+      }
+      
+      return null;
+    }
+
+    // 清理响应文本
     let jsonText = responseText.trim();
     
     console.log("Raw API response length:", jsonText.length);
-    console.log("Raw API response preview:", jsonText.substring(0, 2000)); // 打印前2000个字符用于调试
+    console.log("Raw API response preview:", jsonText.substring(0, 500)); // 打印前500个字符用于调试
     
     // 方法1: 如果响应被包裹在代码块中，提取出来
     const codeBlockMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
@@ -198,7 +226,13 @@ ${rawText}
       jsonText = codeBlockMatch[1];
       console.log("从代码块中提取 JSON");
     } else {
-      // 方法2: 使用更智能的 JSON 提取 - 找到所有可能的 JSON 对象
+      // 方法2: 使用正则表达式直接提取 JSON
+      const extracted = extractJSON(jsonText);
+      if (extracted) {
+        jsonText = extracted;
+        console.log("使用正则表达式提取 JSON，长度:", jsonText.length);
+      } else {
+        // 方法3: 使用更智能的 JSON 提取 - 找到所有可能的 JSON 对象
       const jsonCandidates: Array<{text: string, score: number}> = [];
       
       // 找到所有 { 的位置
