@@ -44,6 +44,12 @@ jobs:
         with:
           path: './dist'
       
+      - name: Verify artifact
+        run: |
+          echo "=== Verifying uploaded files ==="
+          echo "Files in dist:"
+          find dist -type f -exec ls -lh {} \;
+      
       - name: List dist contents
         run: |
           echo "=== dist directory ==="
