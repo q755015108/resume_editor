@@ -135,7 +135,41 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       
       // 优先获取 content，如果没有则尝试获取其他字段
       if (data.candidates[0].content && data.candidates[0].content.parts) {
-        text = data.candidates[0].content.parts[0].text || '';
+        const parts = data.candidates[0].content.parts;
+        console.log('parts 数量:', parts.length);
+        
+        // 遍历所有 parts，找到非思考过程的文本（thought: false 或没有 thought 字段）
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          console.log(`part[${i}]:`, {
+            hasText: !!part.text,
+            textLength: part.text?.length || 0,
+            thought: part.thought,
+            textPreview: part.text?.substring(0, 100)
+          });
+          
+          // 如果这个 part 不是思考过程（thought 为 false 或 undefined），使用它
+          if (part.text && (part.thought === false || part.thought === undefined)) {
+            text = part.text;
+            console.log(`✅ 找到非思考过程的文本，使用 part[${i}]`);
+            break;
+          }
+        }
+        
+        // 如果没找到非思考过程的文本，尝试使用最后一个 part（通常是实际输出）
+        if (!text && parts.length > 0) {
+          const lastPart = parts[parts.length - 1];
+          if (lastPart.text) {
+            text = lastPart.text;
+            console.log('⚠️ 使用最后一个 part 作为文本');
+          }
+        }
+        
+        // 如果还是没找到，使用第一个 part（向后兼容）
+        if (!text && parts.length > 0 && parts[0].text) {
+          text = parts[0].text;
+          console.log('⚠️ 使用第一个 part 作为文本');
+        }
       }
       
       // 检查是否有 groundingMetadata 或其他字段包含 JSON
