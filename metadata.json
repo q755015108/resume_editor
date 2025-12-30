@@ -1,6 +1,6 @@
 {
-  "name": "AI Resume Builder",
-  "description": "A professional, editable resume builder with AI-powered content optimization using Gemini.",
+  "name": "简历编辑器",
+  "description": "A professional, editable resume builder",
   "requestFramePermissions": [
     "camera"
   ]

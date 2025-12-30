@@ -6,7 +6,7 @@ import {
   GraduationCap, User as UserIcon, ArrowUp, ArrowDown, 
   Wand2, X, Loader2, CopyPlus, GripVertical, FileText, Send
 } from 'lucide-react';
-import { parseResumeFromText } from '../services/geminiService';
+import { generateResumeContent } from '../services/resumeService';
 
 interface ResumeEditorProps {
   data: ResumeData;
@@ -14,32 +14,43 @@ interface ResumeEditorProps {
 }
 
 const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
-  const [isMagicImportOpen, setIsMagicImportOpen] = useState(false);
-  const [rawText, setRawText] = useState('');
-  const [isParsing, setIsParsing] = useState(false);
-  const [parseError, setParseError] = useState('');
+  const [isAutoFillOpen, setIsAutoFillOpen] = useState(false);
+  const [userInput, setUserInput] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState('');
 
-  const handleMagicParse = async () => {
-    if (!rawText.trim()) return;
-    setIsParsing(true);
-    setParseError('');
+  const handleAutoFill = async () => {
+    if (!userInput.trim()) {
+      setGenerateError('请输入基本信息');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerateError('');
+
     try {
-      const parsedData = await parseResumeFromText(rawText);
-      if (parsedData) {
+      const generatedData = await generateResumeContent(userInput);
+      
+      if (generatedData) {
+        // 合并生成的数据
         onChange({
           ...data,
-          personal: parsedData.personal || data.personal,
-          pages: parsedData.pages || data.pages
+          personal: {
+            ...data.personal,
+            ...generatedData.personal,
+            items: generatedData.personal?.items || data.personal.items
+          },
+          pages: generatedData.pages || data.pages
         });
-        setIsMagicImportOpen(false);
-        setRawText('');
+        
+        setIsAutoFillOpen(false);
+        setUserInput('');
       }
     } catch (err: any) {
-      const errorMsg = err?.message || '解析失败，请检查文本内容或 API Key 设置。';
-      setParseError(errorMsg);
-      console.error("Parse error details:", err);
+      setGenerateError(err.message || '生成失败，请稍后重试');
+      console.error('生成简历失败:', err);
     } finally {
-      setIsParsing(false);
+      setIsGenerating(false);
     }
   };
 
@@ -79,74 +90,101 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
   return (
     <div className="flex flex-col gap-8 pb-20">
-      {/* AI 解析入口按钮 */}
+      {/* AI 一键填写入口 */}
       <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-2xl text-white shadow-xl shadow-blue-100">
-        <h3 className="font-bold flex items-center gap-2 mb-1 text-base"><Sparkles className="w-5 h-5 text-yellow-300 animate-pulse" /> AI 快速解析</h3>
-        <p className="text-xs text-blue-100 mb-4 opacity-90 leading-relaxed">粘贴旧简历文本，AI 自动为你分类填充到各个板块。</p>
+        <h3 className="font-bold flex items-center gap-2 mb-1 text-base">
+          <Sparkles className="w-5 h-5 text-yellow-300 animate-pulse" /> AI 一键填写
+        </h3>
+        <p className="text-xs text-blue-100 mb-4 opacity-90 leading-relaxed">
+          输入你的基本信息（姓名、学校、专业、工作经历等），AI 将自动为你生成完整的简历内容。
+        </p>
         <button 
-          onClick={() => setIsMagicImportOpen(true)} 
+          onClick={() => setIsAutoFillOpen(true)} 
           className="w-full bg-white text-blue-600 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-blue-50 transition-colors active:scale-95"
         >
-          开始智能解析
+          开始一键填写
         </button>
       </div>
 
-      {/* AI 解析弹窗 (Modal) */}
-      {isMagicImportOpen && (
+      {/* AI 一键填写弹窗 */}
+      {isAutoFillOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-8">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isParsing && setIsMagicImportOpen(false)}></div>
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isGenerating && setIsAutoFillOpen(false)}></div>
           <div className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-6 border-b flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <div className="bg-blue-600 p-2 rounded-xl"><Sparkles className="w-5 h-5 text-white" /></div>
+                <div className="bg-blue-600 p-2 rounded-xl">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
                 <div>
-                  <h2 className="text-lg font-black text-gray-800">AI 简历智能解析</h2>
-                  <p className="text-xs text-gray-400">支持自由格式的简历文本提取</p>
+                  <h2 className="text-lg font-black text-gray-800">AI 一键填写简历</h2>
+                  <p className="text-xs text-gray-400">输入基本信息，AI 将自动生成完整简历</p>
                 </div>
               </div>
-              <button onClick={() => setIsMagicImportOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"><X className="w-6 h-6" /></button>
+              <button 
+                onClick={() => setIsAutoFillOpen(false)} 
+                disabled={isGenerating}
+                className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors disabled:opacity-50"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
             
             <div className="p-6 flex-1 overflow-y-auto">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">粘贴简历原始文本</label>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                请输入你的基本信息
+              </label>
               <textarea 
-                value={rawText}
-                onChange={(e) => setRawText(e.target.value)}
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
                 placeholder="例如：
-张小可，可瓦大学会计学学士...
-曾任职于xxx会计师事务所，负责审计工作..."
+姓名：张三
+学校：北京大学
+专业：计算机科学与技术
+学历：本科
+工作经历：曾在腾讯公司担任前端开发工程师，负责微信小程序开发..."
                 className="w-full h-64 p-4 border-2 border-gray-100 rounded-2xl focus:border-blue-500 outline-none text-sm leading-relaxed resize-none custom-scrollbar"
+                disabled={isGenerating}
               ></textarea>
               
-              {parseError && (
+              {generateError && (
                 <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-500 text-xs flex items-center gap-2">
-                  <X className="w-4 h-4" /> {parseError}
+                  <X className="w-4 h-4" /> {generateError}
                 </div>
               )}
+
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl text-blue-600 text-xs">
+                <p className="font-semibold mb-1">💡 提示：</p>
+                <ul className="list-disc list-inside space-y-1 text-blue-500">
+                  <li>可以输入姓名、学校、专业、工作经历等任意信息</li>
+                  <li>信息越详细，生成的简历越准确</li>
+                  <li>AI 会根据你提供的信息智能补充其他内容</li>
+                </ul>
+              </div>
             </div>
 
             <div className="p-6 bg-gray-50 border-t flex justify-end gap-3">
               <button 
-                onClick={() => setIsMagicImportOpen(false)} 
-                disabled={isParsing}
+                onClick={() => setIsAutoFillOpen(false)} 
+                disabled={isGenerating}
                 className="px-6 py-2.5 text-sm font-bold text-gray-400 hover:text-gray-600 disabled:opacity-50"
               >
                 取消
               </button>
               <button 
-                onClick={handleMagicParse}
-                disabled={isParsing || !rawText.trim()}
+                onClick={handleAutoFill}
+                disabled={isGenerating || !userInput.trim()}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-200 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
               >
-                {isParsing ? (
+                {isGenerating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>正在提取...</span>
+                    <span>正在生成...</span>
                   </>
                 ) : (
                   <>
-                    <Send className="w-4 h-4" />
-                    <span>立即解析</span>
+                    <Wand2 className="w-4 h-4" />
+                    <span>生成简历</span>
                   </>
                 )}
               </button>

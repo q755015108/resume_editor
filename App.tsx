@@ -152,7 +152,7 @@ const App: React.FC = () => {
             <FileText className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-800 leading-none">AI Resume Pro</h1>
+            <h1 className="text-lg font-bold text-gray-800 leading-none">简历编辑器</h1>
             <p className="text-[10px] text-gray-400 mt-1 font-medium tracking-tighter uppercase">Professional Resume Builder</p>
           </div>
         </div>

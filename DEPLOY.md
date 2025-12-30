@@ -22,11 +22,7 @@
    - 进入仓库 Settings → Pages
    - Source 选择 "GitHub Actions"
 
-2. **配置 Secrets**
-   - 进入仓库 Settings → Secrets and variables → Actions
-   - 添加 `GEMINI_API_KEY` secret（用于构建时的环境变量）
-
-3. **更新 vite.config.ts**
+2. **更新 vite.config.ts**
    ```typescript
    export default defineConfig({
      base: '/your-repo-name/', // 替换为你的仓库名
@@ -78,10 +74,7 @@
    vercel
    ```
 
-4. **配置环境变量**
-   - 在 Vercel 项目设置中添加 `GEMINI_API_KEY`
-
-5. **自动部署**
+4. **自动部署**
    - 连接 GitHub 仓库后，每次 push 都会自动部署
 
 ## 📦 Netlify
@@ -93,7 +86,6 @@
    - 构建设置：
      - Build command: `npm run build`
      - Publish directory: `dist`
-   - 添加环境变量 `GEMINI_API_KEY`
 
 2. **通过 Netlify CLI**
    ```bash
@@ -102,29 +94,13 @@
    netlify deploy --prod
    ```
 
-## 🔧 环境变量配置
-
-所有部署平台都需要配置 `GEMINI_API_KEY` 环境变量：
-
-- **GitHub Pages (Actions)**: Settings → Secrets → Actions
-- **Vercel**: Project Settings → Environment Variables
-- **Netlify**: Site Settings → Environment Variables
-
 ## ⚠️ 注意事项
 
-1. **API Key 安全**
-   - 不要将 API Key 提交到代码仓库
-   - 使用环境变量或 Secrets 管理
-   - 生产环境建议设置 API Key 使用限制
-
-2. **构建配置**
+1. **构建配置**
    - 确保 `vite.config.ts` 中的 `base` 路径正确
    - 如果部署到子路径，需要设置正确的 `base` 值
 
-3. **CORS 问题**
-   - 如果遇到 CORS 问题，检查 API Key 的域名限制设置
-
-4. **性能优化**
+2. **性能优化**
    - 生产构建会自动优化代码
    - 建议启用 CDN 加速静态资源
 
@@ -142,9 +118,4 @@
 - 检查浏览器控制台的错误信息
 - 确认静态资源路径正确
 
-### API 调用失败
-
-- 检查环境变量是否正确配置
-- 检查 API Key 是否有效
-- 查看网络请求的错误信息
 

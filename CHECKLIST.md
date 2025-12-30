@@ -12,30 +12,21 @@
 
 ## ⚠️ 需要你手动完成的事项
 
-### 1. 创建环境变量示例文件
-
-创建 `.env.example` 文件（如果还没有）：
-```env
-# Gemini API Key
-# 获取方式：访问 https://makersuite.google.com/app/apikey
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-### 2. 更新 package.json 中的信息
+### 1. 更新 package.json 中的信息
 
 编辑 `package.json`，更新以下字段：
 - `author`: 你的名字或 GitHub 用户名
 - `repository.url`: 你的 GitHub 仓库地址
 - `homepage`: 你的 GitHub Pages 地址（如果使用）
 
-### 3. 更新 README.md 中的链接
+### 2. 更新 README.md 中的链接
 
 在 `README.md` 中更新：
 - GitHub 仓库链接
 - 联系方式邮箱
 - 部署后的实际访问地址
 
-### 4. 配置 GitHub Pages（如果使用）
+### 3. 配置 GitHub Pages（如果使用）
 
 如果使用 GitHub Pages 部署：
 
@@ -49,9 +40,8 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 2. 在 GitHub 仓库设置中：
    - Settings → Pages → Source 选择 "GitHub Actions"
-   - Settings → Secrets → Actions → 添加 `GEMINI_API_KEY`
 
-### 5. 安装部署依赖（如果使用手动部署）
+### 4. 安装部署依赖（如果使用手动部署）
 
 如果需要手动部署到 GitHub Pages：
 ```bash
@@ -64,7 +54,7 @@ npm install --save-dev gh-pages
    ```bash
    git init
    git add .
-   git commit -m "Initial commit: 简历佳 AI 简历编辑器"
+   git commit -m "Initial commit: 简历佳简历编辑器"
    ```
 
 2. **创建 GitHub 仓库**
@@ -87,7 +77,6 @@ npm install --save-dev gh-pages
 - [ ] 所有代码都已提交
 - [ ] README.md 中的链接都已更新
 - [ ] package.json 中的信息都已更新
-- [ ] 环境变量示例文件已创建
 - [ ] .gitignore 已正确配置
 - [ ] LICENSE 文件已添加
 - [ ] 项目可以正常构建（`npm run build`）

@@ -3,13 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "一个专业的、可编辑的简历构建工具，支持 AI 驱动的内容优化（基于 Google Gemini）",
+  "description": "一个专业的、可编辑的简历构建工具",
   "keywords": [
     "resume",
     "cv",
     "resume-builder",
-    "ai",
-    "gemini",
     "react",
     "typescript"
   ],
