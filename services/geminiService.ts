@@ -95,22 +95,80 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  const systemInstruction = `你是一个简历解析器。你的任务是将简历文本转换为 JSON 格式。你必须只输出有效的 JSON 对象，不要任何解释、说明、代码块标记或其他文字。直接输出 JSON，不要使用 markdown 代码块。输出的第一行必须是 {，最后一行必须是 }。`;
+  const systemInstruction = `你是一个 JSON 生成器。你的唯一任务是输出有效的 JSON 对象。不要输出任何解释、说明、markdown 代码块、注释或其他文字。只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
 
-  const prompt = `将以下简历文本转换为 JSON 格式。只输出 JSON，不要任何解释。
+  // 构建完整的 JSON 示例
+  const jsonExample = {
+    personal: {
+      name: "张三",
+      objective: "财务助理",
+      photo: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop",
+      items: [
+        { id: "pi-1", label: "手机号码", value: "13000000000" },
+        { id: "pi-2", label: "电子邮箱", value: "zhangsan@example.com" }
+      ]
+    },
+    pages: [
+      {
+        id: "page-1",
+        sections: [
+          {
+            id: "sec-1",
+            type: "education",
+            title: "教育背景",
+            iconName: "GraduationCap",
+            content: [
+              {
+                id: "edu-1",
+                period: "2021.09-2025.06",
+                school: "某某大学",
+                major: "会计学专业",
+                degree: "学士",
+                gpa: "3.6"
+              }
+            ]
+          },
+          {
+            id: "sec-2",
+            type: "experience",
+            title: "实习经历",
+            iconName: "Briefcase",
+            content: [
+              {
+                id: "exp-1",
+                period: "2024.01-2024.06",
+                organization: "某某公司",
+                role: "财务助理",
+                summary: "",
+                points: [
+                  {
+                    id: "p1",
+                    subtitle: "财务处理",
+                    detail: "负责日常财务数据处理"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+
+  const prompt = `将以下简历文本转换为 JSON 格式。严格按照下面的 JSON 结构输出，不要添加任何解释文字。
 
 简历文本：
 ${rawText}
 
-要求：
-1. 个人信息：name（姓名）、objective（求职意向）是固定字段，其他信息放入 items 数组，每个项包含 id, label, value
-2. 教育经历：type="education", title="教育背景", iconName="GraduationCap", content 包含学校、专业、时间、GPA等
-3. 工作经历：type="experience", title="实习经历"或"工作经历", iconName="Briefcase", content 包含 organization, role, period, summary 和 points (subtitle, detail)
-4. 所有 ID 使用随机字符串
-5. 必须输出有效的 JSON 对象，第一行必须是 {，最后一行必须是 }
+必须输出的 JSON 结构（直接复制这个结构并填充数据）：
+${JSON.stringify(jsonExample, null, 2)}
 
-输出格式示例：
-{"personal":{"name":"张三","objective":"财务助理","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[{"id":"pi-1","label":"手机号码","value":"13000000000"}]},"pages":[{"id":"page-1","sections":[{"id":"sec-1","type":"education","title":"教育背景","iconName":"GraduationCap","content":[]}]}]}`;
+重要规则：
+1. 只输出 JSON，不要任何其他文字
+2. 第一行必须是 {
+3. 最后一行必须是 }
+4. 不要使用 markdown 代码块
+5. 不要添加注释或解释`;
 
   try {
     // 检查 API Key
@@ -132,12 +190,13 @@ ${rawText}
     let jsonText = responseText.trim();
     
     console.log("Raw API response length:", jsonText.length);
-    console.log("Raw API response preview:", jsonText.substring(0, 1000)); // 打印前1000个字符用于调试
+    console.log("Raw API response preview:", jsonText.substring(0, 2000)); // 打印前2000个字符用于调试
     
     // 方法1: 如果响应被包裹在代码块中，提取出来
     const codeBlockMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
     if (codeBlockMatch) {
       jsonText = codeBlockMatch[1];
+      console.log("从代码块中提取 JSON");
     } else {
       // 方法2: 使用更智能的 JSON 提取 - 找到所有可能的 JSON 对象
       const jsonCandidates: Array<{text: string, score: number}> = [];
@@ -174,30 +233,35 @@ ${rawText}
           // 1. 必须包含引号（说明是 JSON 格式）
           if (candidate.includes('"')) score += 10;
           // 2. 包含必要的字段
-          if (candidate.includes('"personal"')) score += 20;
-          if (candidate.includes('"pages"')) score += 20;
-          if (candidate.includes('"name"')) score += 5;
-          if (candidate.includes('"sections"')) score += 5;
-          // 3. 长度要足够（至少 100 字符）
-          if (candidate.length > 100) score += 10;
-          if (candidate.length > 500) score += 10;
+          if (candidate.includes('"personal"')) score += 30;
+          if (candidate.includes('"pages"')) score += 30;
+          if (candidate.includes('"name"')) score += 10;
+          if (candidate.includes('"sections"')) score += 10;
+          // 3. 长度要足够（至少 200 字符，说明是完整的 JSON）
+          if (candidate.length > 200) score += 20;
+          if (candidate.length > 500) score += 20;
+          if (candidate.length > 1000) score += 20;
           // 4. 不能包含占位符
           if (!candidate.includes('{...}') && 
               !candidate.match(/\{[^}]*\.\.\.[^}]*\}/) &&
               !candidate.match(/\.\.\.[^}]*\}/)) {
             score += 10;
           }
+          // 5. 包含数组结构（说明是完整的结构）
+          if (candidate.includes('[') && candidate.includes(']')) score += 10;
           
           // 如果得分足够高，尝试预解析
-          if (score >= 30) {
+          if (score >= 40) {
             try {
               JSON.parse(candidate);
               // 如果能解析，额外加分
-              score += 50;
+              score += 100;
               jsonCandidates.push({text: candidate, score});
+              console.log(`找到可解析的 JSON 候选，得分: ${score}, 长度: ${candidate.length}`);
             } catch (e) {
               // 不能解析，但可能可以修复，仍然加入候选
               jsonCandidates.push({text: candidate, score});
+              console.log(`找到 JSON 候选（需修复），得分: ${score}, 长度: ${candidate.length}`);
             }
           }
         }
@@ -207,17 +271,56 @@ ${rawText}
       if (jsonCandidates.length > 0) {
         jsonCandidates.sort((a, b) => b.score - a.score);
         jsonText = jsonCandidates[0].text;
-        console.log(`选择了得分 ${jsonCandidates[0].score} 的 JSON 候选`);
+        console.log(`选择了得分 ${jsonCandidates[0].score} 的 JSON 候选，长度: ${jsonText.length}`);
       } else {
         // 如果还是找不到，尝试从第一个 { 到最后一个 }
         const firstBrace = jsonText.indexOf('{');
         const lastBrace = jsonText.lastIndexOf('}');
         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
           jsonText = jsonText.substring(firstBrace, lastBrace + 1);
-          console.log("使用第一个 { 到最后一个 } 之间的文本");
+          console.log("使用第一个 { 到最后一个 } 之间的文本，长度:", jsonText.length);
         } else {
-          // 如果连 { 和 } 都找不到，说明响应中根本没有 JSON
-          throw new Error(`API 响应中没有找到 JSON 对象。响应内容: ${jsonText.substring(0, 500)}...`);
+          // 如果连 { 和 } 都找不到，尝试在整个响应中搜索 JSON 关键字
+          // 有时候 JSON 可能被埋在很多文字中
+          const hasPersonal = jsonText.includes('"personal"') || jsonText.includes("personal");
+          const hasPages = jsonText.includes('"pages"') || jsonText.includes("pages");
+          
+          if (hasPersonal || hasPages) {
+            // 尝试找到包含这些关键字的最长 JSON 片段
+            // 从包含 "personal" 的位置开始，向前找 {，向后找 }
+            const personalIndex = jsonText.search(/["']personal["']/i);
+            if (personalIndex !== -1) {
+              // 向前找最近的 {
+              let startIdx = personalIndex;
+              while (startIdx > 0 && jsonText[startIdx] !== '{') {
+                startIdx--;
+              }
+              // 向后找匹配的 }
+              if (jsonText[startIdx] === '{') {
+                let braceCount = 0;
+                let endIdx = startIdx;
+                for (let i = startIdx; i < jsonText.length; i++) {
+                  if (jsonText[i] === '{') braceCount++;
+                  if (jsonText[i] === '}') {
+                    braceCount--;
+                    if (braceCount === 0) {
+                      endIdx = i;
+                      break;
+                    }
+                  }
+                }
+                if (endIdx > startIdx) {
+                  jsonText = jsonText.substring(startIdx, endIdx + 1);
+                  console.log("通过关键字搜索找到 JSON，长度:", jsonText.length);
+                }
+              }
+            }
+          }
+          
+          // 如果还是找不到，抛出错误
+          if (!jsonText.startsWith('{') || !jsonText.endsWith('}')) {
+            throw new Error(`API 响应中没有找到有效的 JSON 对象。响应内容: ${responseText.substring(0, 1000)}...`);
+          }
         }
       }
     }
