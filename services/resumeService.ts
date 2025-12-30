@@ -323,27 +323,53 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       jsonText = jsonText.replace(/\/\/.*$/gm, ''); // 移除单行注释
       jsonText = jsonText.replace(/\/\*[\s\S]*?\*\//g, ''); // 移除多行注释
       
-      // 方法5: 尝试解析，如果失败则尝试修复常见问题
+      // 方法5: 清理控制字符和修复常见问题
+      // 移除控制字符（除了必要的空白字符）
+      jsonText = jsonText.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+      
+      // 修复常见的 JSON 错误
+      // 1. 移除尾随逗号
+      jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
+      
+      // 2. 修复单引号为双引号（仅在键和字符串值中，但要小心处理已经转义的引号）
+      // 先处理已经转义的单引号
+      jsonText = jsonText.replace(/\\'/g, '__ESCAPED_SINGLE_QUOTE__');
+      // 然后替换未转义的单引号
+      jsonText = jsonText.replace(/'/g, '"');
+      // 恢复转义的单引号
+      jsonText = jsonText.replace(/__ESCAPED_SINGLE_QUOTE__/g, "\\'");
+      
+      // 3. 修复可能的换行符在字符串中（应该转义为 \n）
+      // 这个比较复杂，先尝试解析，如果失败再处理
+      
+      // 方法6: 尝试解析，如果失败则尝试修复
       let result;
       try {
         result = JSON.parse(jsonText);
       } catch (parseError: any) {
-        console.error('JSON 解析失败，尝试修复...', parseError);
+        console.error('JSON 解析失败，尝试进一步修复...', parseError);
+        console.error('错误位置:', parseError.message);
         
-        // 尝试修复常见的 JSON 错误
-        // 1. 移除尾随逗号
-        jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
+        // 尝试找到错误位置附近的文本
+        const errorMatch = parseError.message.match(/position (\d+)/);
+        if (errorMatch) {
+          const errorPos = parseInt(errorMatch[1]);
+          const start = Math.max(0, errorPos - 50);
+          const end = Math.min(jsonText.length, errorPos + 50);
+          console.error('错误位置附近的文本:', jsonText.substring(start, end));
+        }
         
-        // 2. 修复单引号为双引号（仅在键和字符串值中）
-        jsonText = jsonText.replace(/'/g, '"');
-        
-        // 3. 再次尝试解析
+        // 尝试修复换行符问题（在字符串值中的换行符应该被转义）
+        // 但要注意不要破坏 JSON 结构中的合法换行
         try {
-          result = JSON.parse(jsonText);
+          // 更激进的修复：移除所有控制字符
+          let fixedJson = jsonText.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+          result = JSON.parse(fixedJson);
+          console.log('✅ 修复成功');
         } catch (secondError: any) {
           // 如果还是失败，返回更详细的错误信息
-          const errorPreview = jsonText.substring(0, 200);
-          throw new Error(`JSON 解析失败: ${parseError.message}\n响应预览: ${errorPreview}...`);
+          const errorPreview = jsonText.substring(Math.max(0, errorPos - 100), Math.min(jsonText.length, errorPos + 100));
+          throw new Error(`JSON 解析失败: ${parseError.message}\n错误位置: ${errorPos}\n错误附近文本: ${errorPreview}`);
         }
       }
       
