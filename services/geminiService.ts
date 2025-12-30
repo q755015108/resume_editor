@@ -241,126 +241,127 @@ ${rawText}
       } else {
         // 方法3: 使用更智能的 JSON 提取 - 找到所有可能的 JSON 对象
         const jsonCandidates: Array<{text: string, score: number}> = [];
-      
-      // 找到所有 { 的位置
-      const openBraces: number[] = [];
-      for (let i = 0; i < jsonText.length; i++) {
-        if (jsonText[i] === '{') {
-          openBraces.push(i);
-        }
-      }
-      
-      console.log(`找到 ${openBraces.length} 个可能的 JSON 起始位置`);
-      
-      // 对每个 {，尝试找到匹配的 }
-      for (const startIndex of openBraces) {
-        let braceCount = 0;
-        let endIndex = -1;
-        for (let i = startIndex; i < jsonText.length; i++) {
-          if (jsonText[i] === '{') braceCount++;
-          if (jsonText[i] === '}') {
-            braceCount--;
-            if (braceCount === 0) {
-              endIndex = i;
-              break;
-            }
+        
+        // 找到所有 { 的位置
+        const openBraces: number[] = [];
+        for (let i = 0; i < jsonText.length; i++) {
+          if (jsonText[i] === '{') {
+            openBraces.push(i);
           }
         }
-        if (endIndex !== -1) {
-          const candidate = jsonText.substring(startIndex, endIndex + 1);
-          let score = 0;
-          
-          // 评分系统：符合要求的 JSON 得分更高
-          // 1. 必须包含引号（说明是 JSON 格式）
-          if (candidate.includes('"')) score += 10;
-          // 2. 包含必要的字段
-          if (candidate.includes('"personal"')) score += 30;
-          if (candidate.includes('"pages"')) score += 30;
-          if (candidate.includes('"name"')) score += 10;
-          if (candidate.includes('"sections"')) score += 10;
-          // 3. 长度要足够（至少 200 字符，说明是完整的 JSON）
-          if (candidate.length > 200) score += 20;
-          if (candidate.length > 500) score += 20;
-          if (candidate.length > 1000) score += 20;
-          // 4. 不能包含占位符
-          if (!candidate.includes('{...}') && 
-              !candidate.match(/\{[^}]*\.\.\.[^}]*\}/) &&
-              !candidate.match(/\.\.\.[^}]*\}/)) {
-            score += 10;
-          }
-          // 5. 包含数组结构（说明是完整的结构）
-          if (candidate.includes('[') && candidate.includes(']')) score += 10;
-          
-          // 如果得分足够高，尝试预解析
-          if (score >= 40) {
-            try {
-              JSON.parse(candidate);
-              // 如果能解析，额外加分
-              score += 100;
-              jsonCandidates.push({text: candidate, score});
-              console.log(`找到可解析的 JSON 候选，得分: ${score}, 长度: ${candidate.length}`);
-            } catch (e) {
-              // 不能解析，但可能可以修复，仍然加入候选
-              jsonCandidates.push({text: candidate, score});
-              console.log(`找到 JSON 候选（需修复），得分: ${score}, 长度: ${candidate.length}`);
-            }
-          }
-        }
-      }
-      
-      // 选择得分最高的候选 JSON
-      if (jsonCandidates.length > 0) {
-        jsonCandidates.sort((a, b) => b.score - a.score);
-        jsonText = jsonCandidates[0].text;
-        console.log(`选择了得分 ${jsonCandidates[0].score} 的 JSON 候选，长度: ${jsonText.length}`);
-      } else {
-        // 如果还是找不到，尝试从第一个 { 到最后一个 }
-        const firstBrace = jsonText.indexOf('{');
-        const lastBrace = jsonText.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-          jsonText = jsonText.substring(firstBrace, lastBrace + 1);
-          console.log("使用第一个 { 到最后一个 } 之间的文本，长度:", jsonText.length);
-        } else {
-          // 如果连 { 和 } 都找不到，尝试在整个响应中搜索 JSON 关键字
-          // 有时候 JSON 可能被埋在很多文字中
-          const hasPersonal = jsonText.includes('"personal"') || jsonText.includes("personal");
-          const hasPages = jsonText.includes('"pages"') || jsonText.includes("pages");
-          
-          if (hasPersonal || hasPages) {
-            // 尝试找到包含这些关键字的最长 JSON 片段
-            // 从包含 "personal" 的位置开始，向前找 {，向后找 }
-            const personalIndex = jsonText.search(/["']personal["']/i);
-            if (personalIndex !== -1) {
-              // 向前找最近的 {
-              let startIdx = personalIndex;
-              while (startIdx > 0 && jsonText[startIdx] !== '{') {
-                startIdx--;
+        
+        console.log(`找到 ${openBraces.length} 个可能的 JSON 起始位置`);
+        
+        // 对每个 {，尝试找到匹配的 }
+        for (const startIndex of openBraces) {
+          let braceCount = 0;
+          let endIndex = -1;
+          for (let i = startIndex; i < jsonText.length; i++) {
+            if (jsonText[i] === '{') braceCount++;
+            if (jsonText[i] === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                endIndex = i;
+                break;
               }
-              // 向后找匹配的 }
-              if (jsonText[startIdx] === '{') {
-                let braceCount = 0;
-                let endIdx = startIdx;
-                for (let i = startIdx; i < jsonText.length; i++) {
-                  if (jsonText[i] === '{') braceCount++;
-                  if (jsonText[i] === '}') {
-                    braceCount--;
-                    if (braceCount === 0) {
-                      endIdx = i;
-                      break;
+            }
+          }
+          if (endIndex !== -1) {
+            const candidate = jsonText.substring(startIndex, endIndex + 1);
+            let score = 0;
+            
+            // 评分系统：符合要求的 JSON 得分更高
+            // 1. 必须包含引号（说明是 JSON 格式）
+            if (candidate.includes('"')) score += 10;
+            // 2. 包含必要的字段
+            if (candidate.includes('"personal"')) score += 30;
+            if (candidate.includes('"pages"')) score += 30;
+            if (candidate.includes('"name"')) score += 10;
+            if (candidate.includes('"sections"')) score += 10;
+            // 3. 长度要足够（至少 200 字符，说明是完整的 JSON）
+            if (candidate.length > 200) score += 20;
+            if (candidate.length > 500) score += 20;
+            if (candidate.length > 1000) score += 20;
+            // 4. 不能包含占位符
+            if (!candidate.includes('{...}') && 
+                !candidate.match(/\{[^}]*\.\.\.[^}]*\}/) &&
+                !candidate.match(/\.\.\.[^}]*\}/)) {
+              score += 10;
+            }
+            // 5. 包含数组结构（说明是完整的结构）
+            if (candidate.includes('[') && candidate.includes(']')) score += 10;
+            
+            // 如果得分足够高，尝试预解析
+            if (score >= 40) {
+              try {
+                JSON.parse(candidate);
+                // 如果能解析，额外加分
+                score += 100;
+                jsonCandidates.push({text: candidate, score});
+                console.log(`找到可解析的 JSON 候选，得分: ${score}, 长度: ${candidate.length}`);
+              } catch (e) {
+                // 不能解析，但可能可以修复，仍然加入候选
+                jsonCandidates.push({text: candidate, score});
+                console.log(`找到 JSON 候选（需修复），得分: ${score}, 长度: ${candidate.length}`);
+              }
+            }
+          }
+        }
+        
+        // 选择得分最高的候选 JSON
+        if (jsonCandidates.length > 0) {
+          jsonCandidates.sort((a, b) => b.score - a.score);
+          jsonText = jsonCandidates[0].text;
+          console.log(`选择了得分 ${jsonCandidates[0].score} 的 JSON 候选，长度: ${jsonText.length}`);
+        } else {
+          // 如果还是找不到，尝试从第一个 { 到最后一个 }
+          const firstBrace = jsonText.indexOf('{');
+          const lastBrace = jsonText.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+            console.log("使用第一个 { 到最后一个 } 之间的文本，长度:", jsonText.length);
+          } else {
+            // 如果连 { 和 } 都找不到，尝试在整个响应中搜索 JSON 关键字
+            // 有时候 JSON 可能被埋在很多文字中
+            const hasPersonal = jsonText.includes('"personal"') || jsonText.includes("personal");
+            const hasPages = jsonText.includes('"pages"') || jsonText.includes("pages");
+            
+            if (hasPersonal || hasPages) {
+              // 尝试找到包含这些关键字的最长 JSON 片段
+              // 从包含 "personal" 的位置开始，向前找 {，向后找 }
+              const personalIndex = jsonText.search(/["']personal["']/i);
+              if (personalIndex !== -1) {
+                // 向前找最近的 {
+                let startIdx = personalIndex;
+                while (startIdx > 0 && jsonText[startIdx] !== '{') {
+                  startIdx--;
+                }
+                // 向后找匹配的 }
+                if (jsonText[startIdx] === '{') {
+                  let braceCount = 0;
+                  let endIdx = startIdx;
+                  for (let i = startIdx; i < jsonText.length; i++) {
+                    if (jsonText[i] === '{') braceCount++;
+                    if (jsonText[i] === '}') {
+                      braceCount--;
+                      if (braceCount === 0) {
+                        endIdx = i;
+                        break;
+                      }
                     }
                   }
-                }
-                if (endIdx > startIdx) {
-                  jsonText = jsonText.substring(startIdx, endIdx + 1);
-                  console.log("通过关键字搜索找到 JSON，长度:", jsonText.length);
+                  if (endIdx > startIdx) {
+                    jsonText = jsonText.substring(startIdx, endIdx + 1);
+                    console.log("通过关键字搜索找到 JSON，长度:", jsonText.length);
+                  }
                 }
               }
             }
-          }
-          
-          // 如果还是找不到，抛出错误
-          if (!jsonText.startsWith('{') || !jsonText.endsWith('}')) {
-            throw new Error(`API 响应中没有找到有效的 JSON 对象。响应内容: ${responseText.substring(0, 1000)}...`);
+            
+            // 如果还是找不到，抛出错误
+            if (!jsonText.startsWith('{') || !jsonText.endsWith('}')) {
+              throw new Error(`API 响应中没有找到有效的 JSON 对象。响应内容: ${responseText.substring(0, 1000)}...`);
+            }
           }
         }
       }

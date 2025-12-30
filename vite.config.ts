@@ -1,16 +1,15 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { existsSync } from 'fs';
 
 export default defineConfig(({ mode }) => {
     // 只在文件存在时加载环境变量，避免权限错误
-    let env = {};
+    let env: Record<string, string> = {};
     try {
-        env = loadEnv(mode, '.', '');
+        env = loadEnv(mode, process.cwd(), '');
     } catch (error) {
         // 如果加载失败（如文件不存在），使用空对象
-        console.warn('Failed to load .env files:', error);
+        // 静默失败，不影响构建
     }
     // Vercel 部署时不需要 base 路径，GitHub Pages 需要
     const base = process.env.VERCEL ? '/' : '/resume_editor/';
