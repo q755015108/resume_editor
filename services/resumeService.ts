@@ -121,27 +121,83 @@ export async function generateResumeContent(userInput: string): Promise<any> {
     if (data.candidates && data.candidates[0] && data.candidates[0].content) {
       const text = data.candidates[0].content.parts[0].text;
       
-      // 提取 JSON（可能被包裹在代码块中）
+      // 提取 JSON（可能被包裹在代码块中或包含 Markdown）
       let jsonText = text.trim();
       
-      // 移除可能的 markdown 代码块标记
+      console.log('原始 API 响应:', jsonText.substring(0, 500)); // 调试用
+      
+      // 方法1: 移除可能的 markdown 代码块标记
       jsonText = jsonText.replace(/^```json\s*/g, '');
       jsonText = jsonText.replace(/^```\s*/g, '');
       jsonText = jsonText.replace(/```\s*$/g, '');
       jsonText = jsonText.trim();
       
-      // 提取第一个完整的 JSON 对象
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        jsonText = jsonMatch[0];
+      // 方法2: 移除 Markdown 格式标记（**、*、# 等）
+      jsonText = jsonText.replace(/\*\*/g, ''); // 移除 **加粗**
+      jsonText = jsonText.replace(/\*([^*]+)\*/g, '$1'); // 移除 *斜体*
+      jsonText = jsonText.replace(/^#+\s*/gm, ''); // 移除标题标记
+      jsonText = jsonText.replace(/`([^`]+)`/g, '$1'); // 移除行内代码
+      
+      // 方法3: 提取第一个完整的 JSON 对象
+      // 找到第一个 { 的位置
+      const firstBrace = jsonText.indexOf('{');
+      if (firstBrace === -1) {
+        throw new Error('响应中没有找到 JSON 对象');
       }
       
-      // 解析 JSON
-      const result = JSON.parse(jsonText);
+      // 从第一个 { 开始，找到匹配的最后一个 }
+      let braceCount = 0;
+      let lastBrace = -1;
+      for (let i = firstBrace; i < jsonText.length; i++) {
+        if (jsonText[i] === '{') braceCount++;
+        if (jsonText[i] === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            lastBrace = i;
+            break;
+          }
+        }
+      }
+      
+      if (lastBrace === -1) {
+        throw new Error('JSON 对象不完整，缺少闭合括号');
+      }
+      
+      jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+      
+      // 方法4: 清理可能的注释和多余内容
+      // 移除 JSON 中不应该存在的注释（虽然标准 JSON 不支持注释）
+      jsonText = jsonText.replace(/\/\/.*$/gm, ''); // 移除单行注释
+      jsonText = jsonText.replace(/\/\*[\s\S]*?\*\//g, ''); // 移除多行注释
+      
+      // 方法5: 尝试解析，如果失败则尝试修复常见问题
+      let result;
+      try {
+        result = JSON.parse(jsonText);
+      } catch (parseError: any) {
+        console.error('JSON 解析失败，尝试修复...', parseError);
+        
+        // 尝试修复常见的 JSON 错误
+        // 1. 移除尾随逗号
+        jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1');
+        
+        // 2. 修复单引号为双引号（仅在键和字符串值中）
+        jsonText = jsonText.replace(/'/g, '"');
+        
+        // 3. 再次尝试解析
+        try {
+          result = JSON.parse(jsonText);
+        } catch (secondError: any) {
+          // 如果还是失败，返回更详细的错误信息
+          const errorPreview = jsonText.substring(0, 200);
+          throw new Error(`JSON 解析失败: ${parseError.message}\n响应预览: ${errorPreview}...`);
+        }
+      }
+      
       return result;
     }
     
-    throw new Error('API 返回格式不正确');
+    throw new Error('API 返回格式不正确：没有找到 candidates');
   } catch (error: any) {
     console.error('生成简历失败:', error);
     throw new Error(error.message || '生成简历失败，请稍后重试');
