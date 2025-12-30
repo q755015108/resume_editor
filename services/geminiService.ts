@@ -1,6 +1,6 @@
 
-const API_BASE_URL = 'https://yunwu.ai/v1beta'; // 注意：你提供的地址有双斜杠，已修正
-const MODEL_ID = 'gemini-3-flash-preview';
+// API 地址：https://yunwu.ai//v1beta/models/gemini-3-flash-preview:generateContent
+const API_URL = 'https://yunwu.ai//v1beta/models/gemini-3-flash-preview:generateContent';
 
 // Gemini API 支持的 generationConfig 参数：
 // - temperature: 0-2，控制随机性，0=确定性，2=随机性
@@ -26,7 +26,7 @@ async function callYunwuAI(prompt: string, systemInstruction?: string, options?:
     throw new Error("API Key is missing");
   }
 
-  const url = `${API_BASE_URL}/models/${MODEL_ID}:generateContent`;
+  const url = API_URL;
   
   const requestBody: any = {
     contents: [{
