@@ -4,7 +4,7 @@ import { ResumeData, ResumeSection, EducationItem, ExperienceItem, SectionType, 
 import { 
   Plus, Trash2, Sparkles, Briefcase, 
   GraduationCap, User as UserIcon, ArrowUp, ArrowDown, 
-  Wand2, X, Loader2, CopyPlus, GripVertical, FileText, Send
+  Wand2, X, Loader2, CopyPlus, GripVertical, FileText, Send, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { generateResumeContent } from '../services/resumeService';
 
@@ -18,6 +18,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const [userInput, setUserInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleAutoFill = async () => {
     if (!userInput.trim()) {
@@ -72,6 +73,36 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
   const removePersonalInfoItem = (id: string) => {
     onChange({ ...data, personal: { ...data.personal, items: data.personal.items.filter(i => i.id !== id) } });
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // 检查文件类型
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件');
+      return;
+    }
+
+    // 检查文件大小（限制为 5MB）
+    if (file.size > 5 * 1024 * 1024) {
+      alert('图片大小不能超过 5MB');
+      return;
+    }
+
+    // 读取文件并转换为 base64
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (result) {
+        updatePersonalField('photo', result);
+      }
+    };
+    reader.onerror = () => {
+      alert('图片读取失败，请重试');
+    };
+    reader.readAsDataURL(file);
   };
 
   const addSectionToPage = (pageIdx: number, type: SectionType) => {
@@ -199,6 +230,51 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
           <UserIcon className="w-4 h-4 text-blue-600" /> 个人核心信息
         </h3>
         <div className="space-y-4">
+          {/* 头像上传 */}
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-bold text-gray-400 uppercase">个人照片</label>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                {data.personal.photo ? (
+                  <img 
+                    src={data.personal.photo} 
+                    alt="个人照片" 
+                    className="w-24 h-32 object-cover border-2 border-gray-200 rounded-lg"
+                  />
+                ) : (
+                  <div className="w-24 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                    <ImageIcon className="w-8 h-8 text-gray-400" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>上传照片</span>
+                </button>
+                {data.personal.photo && (
+                  <button
+                    onClick={() => updatePersonalField('photo', '')}
+                    className="mt-2 text-xs text-red-500 hover:text-red-700"
+                  >
+                    删除照片
+                  </button>
+                )}
+                <p className="text-[10px] text-gray-400 mt-1">支持 JPG、PNG 格式，最大 5MB</p>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-bold text-gray-400 uppercase">姓名 (固定位置)</label>
