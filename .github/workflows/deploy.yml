@@ -43,6 +43,9 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
+      
+      - name: List dist contents
+        run: ls -la dist/ || echo "dist directory not found"
 
   deploy:
     environment:
