@@ -118,6 +118,16 @@ export async function generateResumeContent(userInput: string): Promise<any> {
 
     const data = await response.json();
     
+    // 调试：打印完整的 API 响应结构
+    console.log('=== API 完整响应结构 ===');
+    console.log('响应 keys:', Object.keys(data));
+    console.log('candidates 数量:', data.candidates?.length);
+    if (data.candidates && data.candidates[0]) {
+      console.log('candidate[0] keys:', Object.keys(data.candidates[0]));
+      console.log('candidate[0] 完整内容:', JSON.stringify(data.candidates[0], null, 2));
+    }
+    console.log('========================');
+    
     // 解析响应
     if (data.candidates && data.candidates[0]) {
       // 检查是否有思考过程（thinking）
@@ -126,6 +136,24 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       // 优先获取 content，如果没有则尝试获取其他字段
       if (data.candidates[0].content && data.candidates[0].content.parts) {
         text = data.candidates[0].content.parts[0].text || '';
+      }
+      
+      // 检查是否有 groundingMetadata 或其他字段包含 JSON
+      if (!text && data.candidates[0].groundingMetadata) {
+        console.log('找到 groundingMetadata:', data.candidates[0].groundingMetadata);
+      }
+      
+      // 检查是否有其他可能的文本字段
+      if (!text) {
+        // 尝试查找所有可能的文本字段
+        const candidate = data.candidates[0];
+        for (const key in candidate) {
+          if (typeof candidate[key] === 'string' && candidate[key].length > 100) {
+            console.log(`找到可能的文本字段 ${key}:`, candidate[key].substring(0, 200));
+            text = candidate[key];
+            break;
+          }
+        }
       }
       
       // 如果响应中包含思考过程，尝试提取实际的 JSON
