@@ -95,80 +95,19 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  const systemInstruction = `你是一个 JSON 生成器。你的唯一任务是输出有效的 JSON 对象。不要输出任何解释、说明、markdown 代码块、注释或其他文字。只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
+  const systemInstruction = `你是一个 JSON 输出器。你的任务是将简历文本转换为 JSON。只输出 JSON，不要任何其他文字。`;
 
-  // 构建完整的 JSON 示例
-  const jsonExample = {
-    personal: {
-      name: "张三",
-      objective: "财务助理",
-      photo: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop",
-      items: [
-        { id: "pi-1", label: "手机号码", value: "13000000000" },
-        { id: "pi-2", label: "电子邮箱", value: "zhangsan@example.com" }
-      ]
-    },
-    pages: [
-      {
-        id: "page-1",
-        sections: [
-          {
-            id: "sec-1",
-            type: "education",
-            title: "教育背景",
-            iconName: "GraduationCap",
-            content: [
-              {
-                id: "edu-1",
-                period: "2021.09-2025.06",
-                school: "某某大学",
-                major: "会计学专业",
-                degree: "学士",
-                gpa: "3.6"
-              }
-            ]
-          },
-          {
-            id: "sec-2",
-            type: "experience",
-            title: "实习经历",
-            iconName: "Briefcase",
-            content: [
-              {
-                id: "exp-1",
-                period: "2024.01-2024.06",
-                organization: "某某公司",
-                role: "财务助理",
-                summary: "",
-                points: [
-                  {
-                    id: "p1",
-                    subtitle: "财务处理",
-                    detail: "负责日常财务数据处理"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  };
-
-  const prompt = `将以下简历文本转换为 JSON 格式。严格按照下面的 JSON 结构输出，不要添加任何解释文字。
-
-简历文本：
+  const prompt = `简历文本：
 ${rawText}
 
-必须输出的 JSON 结构（直接复制这个结构并填充数据）：
-${JSON.stringify(jsonExample, null, 2)}
+输出要求：
+1. 提取个人信息：name（姓名）、objective（求职意向），其他信息放入 items 数组
+2. 提取教育经历：放入 type="education" 的 section
+3. 提取工作经历：放入 type="experience" 的 section
+4. 所有 ID 使用随机字符串
 
-重要规则：
-1. 只输出 JSON，不要任何其他文字
-2. 第一行必须是 {
-3. 最后一行必须是 }
-4. 不要使用 markdown 代码块
-5. 不要添加注释或解释`;
+只输出 JSON，格式如下：
+{"personal":{"name":"","objective":"","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[]},"pages":[{"id":"","sections":[]}]}`;
 
   try {
     // 检查 API Key
