@@ -170,12 +170,16 @@ ${rawText}
     
     console.log("Calling Yunwu AI with model:", MODEL_ID);
     // 强制使用 JSON 格式输出
+    // temperature: 0.1 - 接近于 0，让模型尽可能死板地遵循指令，防止自我发挥或修改用户信息
+    // responseMimeType: "application/json" - 强制输出合法 JSON，配合 Prompt Schema 保证 JSON.parse 100% 成功
+    // topP: 0.95, topK: 64 - 默认值
+    // maxOutputTokens: 8192 - 输出长度限制
     const responseText = await callYunwuAI(prompt, systemInstruction, {
-      responseMimeType: "application/json",
-      temperature: 0,           // 最低温度，确保输出确定性
-      maxOutputTokens: 16384,  // 增加输出长度到 16384，确保能输出完整 JSON
-      topP: 0.95,              // 核采样，提高输出质量
-      topK: 40                 // Top-K 采样
+      temperature: 0.1,         // 接近 0，死板遵循指令，防止自我发挥
+      responseMimeType: "application/json",  // 强制输出合法 JSON
+      topP: 0.95,               // 默认值
+      topK: 64,                 // 默认值
+      maxOutputTokens: 8192     // 输出长度限制
     });
 
     if (!responseText) {
