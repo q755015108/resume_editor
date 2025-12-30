@@ -55,8 +55,8 @@ jobs:
           echo "=== assets files ==="
           find dist/assets -type f || echo "no files in assets"
           echo ""
-          echo "=== index.html first 30 lines ==="
-          head -30 dist/index.html
+          echo "=== index.html full content ==="
+          cat dist/index.html
 
   deploy:
     environment:
