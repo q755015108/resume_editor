@@ -95,34 +95,42 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 export async function parseResumeFromText(rawText: string): Promise<any> {
   if (!process.env.API_KEY) throw new Error("API Key is missing");
 
-  const systemInstruction = `你是一个简历解析器。你的任务是：
-1. 读取用户提供的简历文本
-2. 将内容分类为：基本信息、教育相关、经历相关、其他信息
-3. 按照指定格式输出 JSON
-只输出 JSON，不要任何解释文字。`;
+  const systemInstruction = `你是一个极其精准的简历信息提取引擎。你的任务是分析简历文本并转换为 JSON 结构。只输出 JSON，不要任何解释文字。`;
 
-  const prompt = `请解析以下简历文本：
+  const prompt = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本，将其转换为 JSON 结构。
 
+文本内容：
+"""
 ${rawText}
+"""
 
-解析步骤：
-第一步：分类内容
-- 基本信息：姓名、电话、邮箱、地址、求职意向等
-- 教育相关：学校、专业、学历、时间、GPA等
-- 经历相关：工作、实习、项目等，包含公司、职位、时间、工作内容
-- 其他信息：技能、证书、奖项等
+规则：
+1. 识别个人信息。注意：姓名(name)和求职意向(objective)是固定字段，其他信息（如电话、邮箱、出生地、生日等）请全部放入 items 数组中，每个项包含 id, label, value。
+2. 教育经历(education)：提取学校、专业、时间、GPA等。
+3. 工作/项目经历(experience)：必须包含 organization, role, period, summary 和 points (带有 subtitle 和 detail)。
+4. 必须输出合法 JSON，所有 ID 使用随机字符串。
 
-第二步：转换为 JSON 格式
-- personal.name: 姓名
-- personal.objective: 求职意向
-- personal.items: 其他基本信息（电话、邮箱等），每个项包含 id, label, value
-- pages[0].sections: 数组，包含教育背景和工作经历
-  - type="education": 教育背景，title="教育背景", iconName="GraduationCap"
-  - type="experience": 工作经历，title="工作经历"或"实习经历", iconName="Briefcase"
-  - content: 具体内容数组
-
-只输出 JSON，格式：
-{"personal":{"name":"","objective":"","photo":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop","items":[]},"pages":[{"id":"page-1","sections":[{"id":"sec-1","type":"education","title":"教育背景","iconName":"GraduationCap","content":[]},{"id":"sec-2","type":"experience","title":"工作经历","iconName":"Briefcase","content":[]}]}]}`;
+输出 JSON 结构参考：
+{
+  "personal": { 
+    "name": "姓名", 
+    "objective": "求职意向", 
+    "photo": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop",
+    "items": [
+      { "id": "1", "label": "手机号码", "value": "xxx" },
+      { "id": "2", "label": "电子邮箱", "value": "xxx" }
+    ]
+  },
+  "pages": [
+    {
+      "id": "p1",
+      "sections": [
+        { "id": "s1", "type": "education", "title": "教育背景", "iconName": "GraduationCap", "content": [] },
+        { "id": "s2", "type": "experience", "title": "实习经历", "iconName": "Briefcase", "content": [] }
+      ]
+    }
+  ]
+}`;
 
   try {
     // 检查 API Key
