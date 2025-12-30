@@ -96,7 +96,8 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       temperature: 0.1,  // 降低温度，更严格遵循指令
       topP: 0.95,
       responseMimeType: 'application/json',  // 强制 JSON 格式
-      maxOutputTokens: 16384  // 确保有足够空间输出完整 JSON
+      maxOutputTokens: 16384,  // 确保有足够空间输出完整 JSON
+      thinkingBudget: 0  // 禁用思考过程，直接输出结果
     }
   };
 
@@ -118,8 +119,49 @@ export async function generateResumeContent(userInput: string): Promise<any> {
     const data = await response.json();
     
     // 解析响应
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-      const text = data.candidates[0].content.parts[0].text;
+    if (data.candidates && data.candidates[0]) {
+      // 检查是否有思考过程（thinking）
+      let text = '';
+      
+      // 优先获取 content，如果没有则尝试获取其他字段
+      if (data.candidates[0].content && data.candidates[0].content.parts) {
+        text = data.candidates[0].content.parts[0].text || '';
+      }
+      
+      // 如果响应中包含思考过程，尝试提取实际的 JSON
+      // 思考过程通常在 "Thought Process" 或类似标记之后
+      // 实际的 JSON 可能在响应的后半部分
+      
+      // 如果文本包含思考过程标记，尝试找到 JSON 部分
+      if (text.includes('Thought Process') || text.includes('**Thought')) {
+        // 尝试找到 JSON 部分：查找最后一个 { 开始的内容
+        const lastBraceIndex = text.lastIndexOf('{');
+        if (lastBraceIndex !== -1) {
+          // 从最后一个 { 开始提取
+          text = text.substring(lastBraceIndex);
+        } else {
+          // 如果找不到 {，尝试查找 JSON 关键字
+          const jsonKeywords = ['"personal"', '"pages"', '"name"'];
+          for (const keyword of jsonKeywords) {
+            const keywordIndex = text.indexOf(keyword);
+            if (keywordIndex !== -1) {
+              // 向前查找最近的 {
+              let braceIndex = keywordIndex;
+              while (braceIndex > 0 && text[braceIndex] !== '{') {
+                braceIndex--;
+              }
+              if (braceIndex >= 0 && text[braceIndex] === '{') {
+                text = text.substring(braceIndex);
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      if (!text) {
+        throw new Error('API 响应中没有找到文本内容');
+      }
       
       // 调试：打印完整的 API 响应
       console.log('=== API 完整响应 ===');
@@ -149,10 +191,49 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       jsonText = jsonText.replace(/`([^`]+)`/g, '$1'); // 移除行内代码
       
       // 方法3: 提取第一个完整的 JSON 对象
+      // 如果响应包含思考过程，尝试找到 JSON 部分
+      // 思考过程通常以 "Thought Process" 或类似标记开始
+      if (jsonText.includes('Thought Process') || jsonText.includes('**Thought')) {
+        // 尝试找到 JSON 关键字，然后向前查找 {
+        const jsonKeywords = ['"personal"', '"pages"', '"name"', '"objective"'];
+        let jsonStartIndex = -1;
+        
+        for (const keyword of jsonKeywords) {
+          const keywordIndex = jsonText.indexOf(keyword);
+          if (keywordIndex !== -1) {
+            // 向前查找最近的 {
+            let braceIndex = keywordIndex;
+            while (braceIndex > 0 && jsonText[braceIndex] !== '{') {
+              braceIndex--;
+            }
+            if (braceIndex >= 0 && jsonText[braceIndex] === '{') {
+              jsonStartIndex = braceIndex;
+              break;
+            }
+          }
+        }
+        
+        if (jsonStartIndex !== -1) {
+          jsonText = jsonText.substring(jsonStartIndex);
+        } else {
+          // 如果找不到关键字，尝试找到最后一个 {
+          const lastBrace = jsonText.lastIndexOf('{');
+          if (lastBrace !== -1) {
+            jsonText = jsonText.substring(lastBrace);
+          }
+        }
+      }
+      
       // 找到第一个 { 的位置
       const firstBrace = jsonText.indexOf('{');
       if (firstBrace === -1) {
-        throw new Error('响应中没有找到 JSON 对象');
+        // 如果还是找不到，尝试查找其他可能的 JSON 标记
+        const possibleJsonStart = jsonText.search(/\{[^}]*"personal"/);
+        if (possibleJsonStart !== -1) {
+          jsonText = jsonText.substring(possibleJsonStart);
+        } else {
+          throw new Error('响应中没有找到 JSON 对象。响应内容：' + jsonText.substring(0, 200));
+        }
       }
       
       // 从第一个 { 开始，找到匹配的最后一个 }
