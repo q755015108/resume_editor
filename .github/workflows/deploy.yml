@@ -45,7 +45,13 @@ jobs:
           path: './dist'
       
       - name: List dist contents
-        run: ls -la dist/ || echo "dist directory not found"
+        run: |
+          echo "=== dist directory ==="
+          ls -la dist/
+          echo "=== assets directory ==="
+          ls -la dist/assets/ || echo "assets directory not found"
+          echo "=== index.html content ==="
+          head -20 dist/index.html
 
   deploy:
     environment:
