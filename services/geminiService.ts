@@ -14,7 +14,7 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash", // 使用有免费配额的模型
+      model: "gemini-pro", // 使用稳定的免费模型
       contents: text,
       config: {
         systemInstruction: systemInstructions[type],
@@ -75,9 +75,9 @@ export async function parseResumeFromText(rawText: string): Promise<any> {
       throw new Error("API Key is missing. Please check environment variable GEMINI_API_KEY.");
     }
     
-    console.log("Calling Gemini API with model: gemini-1.5-flash");
+    console.log("Calling Gemini API with model: gemini-pro");
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash", // 使用有免费配额的模型
+      model: "gemini-pro", // 使用稳定的免费模型
       contents: prompt,
       config: {
         responseMimeType: "application/json",
