@@ -231,26 +231,73 @@ ${rawText}
       // 如果解析失败，尝试修复常见的 JSON 错误
       let fixedJson = jsonText;
       
-      // 尝试修复常见的 JSON 错误
-      // 1. 移除尾随逗号
+      console.log("开始修复 JSON...");
+      
+      // 修复步骤1: 移除尾随逗号
       fixedJson = fixedJson.replace(/,(\s*[}\]])/g, '$1');
       
-      // 2. 确保字符串值被正确引用（如果可能）
-      // 这里不做太多修复，因为可能会破坏有效的 JSON
+      // 修复步骤2: 修复数组元素之间缺少逗号的问题
+      // 匹配模式：] 后面直接跟 } 或 ]，中间可能有空白和换行
+      // 这种情况通常意味着数组元素之间缺少逗号
+      fixedJson = fixedJson.replace(/\](\s*)\}/g, ']$1}');
+      fixedJson = fixedJson.replace(/\](\s*)\]/g, ']$1]');
+      
+      // 修复步骤3: 在对象或数组结束后，如果后面跟着另一个对象/数组，添加逗号
+      // 匹配：} 或 ] 后面跟着 { 或 [，中间只有空白
+      fixedJson = fixedJson.replace(/([}\]])(\s+)([{\[])/g, '$1,$2$3');
+      
+      // 修复步骤4: 修复数组元素之间缺少逗号（更精确的匹配）
+      // 匹配：} 后面跟着 {，中间只有空白和换行，且都在数组内
+      fixedJson = fixedJson.replace(/(\})\s*(\{)/g, (match, p1, p2, offset, string) => {
+        // 检查这个 } 和 { 是否在同一个数组内
+        const before = string.substring(0, offset);
+        const after = string.substring(offset);
+        const openBracesBefore = (before.match(/\{/g) || []).length;
+        const closeBracesBefore = (before.match(/\}/g) || []).length;
+        const openBracketsBefore = (before.match(/\[/g) || []).length;
+        const closeBracketsBefore = (before.match(/\]/g) || []).length;
+        
+        // 如果 } 和 { 的数量不平衡，说明它们在同一个数组内
+        if (openBracketsBefore > closeBracketsBefore) {
+          return p1 + ',' + p2;
+        }
+        return match;
+      });
+      
+      // 修复步骤5: 修复对象属性之间缺少逗号
+      // 匹配：} 后面跟着 "，中间只有空白
+      fixedJson = fixedJson.replace(/(\})\s*(")/g, '$1,$2');
       
       try {
         result = JSON.parse(fixedJson);
         console.log("JSON 修复成功");
       } catch (fixError: any) {
-        // 如果修复后还是失败，显示详细的错误信息
-        const errorPosition = parseError.message.match(/position (\d+)/);
-        if (errorPosition) {
-          const pos = parseInt(errorPosition[1]);
-          const start = Math.max(0, pos - 50);
-          const end = Math.min(jsonText.length, pos + 50);
-          throw new Error(`JSON 解析失败: ${parseError.message}。错误位置附近的文本: ...${jsonText.substring(start, end)}...`);
-        } else {
-          throw new Error(`JSON 解析失败: ${parseError.message}。提取的文本前200字符: ${jsonText.substring(0, 200)}...`);
+        // 如果修复后还是失败，尝试更激进的方法
+        console.log("第一次修复失败，尝试更激进的修复...");
+        
+        // 更激进的修复：在 ] 和 } 之间添加逗号（如果它们在同一层级）
+        let aggressiveFix = fixedJson;
+        aggressiveFix = aggressiveFix.replace(/(\])\s*(\})/g, '$1,$2');
+        aggressiveFix = aggressiveFix.replace(/(\})\s*(\[)/g, '$1,$2');
+        
+        try {
+          result = JSON.parse(aggressiveFix);
+          console.log("激进修复成功");
+        } catch (aggressiveError: any) {
+          // 如果还是失败，显示详细的错误信息
+          const errorPosition = parseError.message.match(/position (\d+)/);
+          if (errorPosition) {
+            const pos = parseInt(errorPosition[1]);
+            const start = Math.max(0, pos - 100);
+            const end = Math.min(jsonText.length, pos + 100);
+            const context = jsonText.substring(start, end);
+            const lines = context.split('\n');
+            const lineNumber = jsonText.substring(0, pos).split('\n').length;
+            
+            throw new Error(`JSON 解析失败: ${parseError.message}。\n错误位置: 第 ${lineNumber} 行，位置 ${pos}\n错误附近的文本:\n${context}`);
+          } else {
+            throw new Error(`JSON 解析失败: ${parseError.message}。提取的文本前500字符: ${jsonText.substring(0, 500)}...`);
+          }
         }
       }
     }
