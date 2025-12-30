@@ -148,7 +148,30 @@ export async function parseResumeFromText(rawText: string): Promise<any> {
       throw new Error("API returned empty response");
     }
 
-    const result = JSON.parse(responseText);
+    // 清理响应文本，提取 JSON 部分
+    let jsonText = responseText.trim();
+    
+    // 如果响应被包裹在代码块中，提取出来
+    const codeBlockMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+    if (codeBlockMatch) {
+      jsonText = codeBlockMatch[1];
+    }
+    
+    // 如果响应包含 markdown 格式，尝试提取第一个 JSON 对象
+    const jsonObjectMatch = jsonText.match(/\{[\s\S]*\}/);
+    if (jsonObjectMatch) {
+      jsonText = jsonObjectMatch[0];
+    }
+    
+    // 移除可能的 markdown 格式标记
+    jsonText = jsonText.replace(/^\*\*.*?\*\*\s*/g, ''); // 移除 **Building** 这样的标记
+    jsonText = jsonText.replace(/^```json\s*/g, ''); // 移除开头的 ```json
+    jsonText = jsonText.replace(/```\s*$/g, ''); // 移除结尾的 ```
+    jsonText = jsonText.trim();
+
+    console.log("Extracted JSON text:", jsonText.substring(0, 200)); // 只打印前200个字符用于调试
+
+    const result = JSON.parse(jsonText);
     return result;
   } catch (error: any) {
     console.error("AI Parse Error Details:", error);
