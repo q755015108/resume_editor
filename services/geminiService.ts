@@ -9,6 +9,7 @@ const MODEL_ID = 'gemini-3-flash-preview';
 // - maxOutputTokens: 1-8192，最大输出 token 数（某些模型支持更大）
 // - responseMimeType: "application/json" 等，强制输出格式
 // - stopSequences: 字符串数组，停止序列
+// - thinkingBudget: 思考预算，设为 0 禁用思考过程，强制直接输出
 
 // 调用 yunwu.ai API
 async function callYunwuAI(prompt: string, systemInstruction?: string, options?: {
@@ -18,6 +19,7 @@ async function callYunwuAI(prompt: string, systemInstruction?: string, options?:
   maxOutputTokens?: number;    // 1-8192 或更大，最大输出长度
   responseMimeType?: string;   // "application/json" 等
   stopSequences?: string[];    // 停止序列数组
+  thinkingBudget?: number;     // 思考预算，0=禁用思考过程
 }) {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -71,6 +73,10 @@ async function callYunwuAI(prompt: string, systemInstruction?: string, options?:
 
   if (options?.stopSequences && options.stopSequences.length > 0) {
     requestBody.generationConfig.stopSequences = options.stopSequences;
+  }
+
+  if (options?.thinkingBudget !== undefined) {
+    requestBody.generationConfig.thinkingBudget = options.thinkingBudget;
   }
 
   const response = await fetch(url, {
@@ -177,12 +183,14 @@ ${rawText}
     // responseMimeType: "application/json" - 强制输出合法 JSON，配合 Prompt Schema 保证 JSON.parse 100% 成功
     // topP: 0.95, topK: 64 - 默认值
     // maxOutputTokens: 8192 - 输出长度限制
+    // thinkingBudget: 0 - 禁用思考过程，强制直接输出 JSON
     const responseText = await callYunwuAI(prompt, systemInstruction, {
       temperature: 0.1,         // 接近 0，死板遵循指令，防止自我发挥
       responseMimeType: "application/json",  // 强制输出合法 JSON
       topP: 0.95,               // 默认值
       topK: 64,                 // 默认值
-      maxOutputTokens: 8192     // 输出长度限制
+      maxOutputTokens: 8192,    // 输出长度限制
+      thinkingBudget: 0         // 禁用思考过程，强制直接输出
     });
 
     if (!responseText) {
