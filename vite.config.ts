@@ -7,7 +7,8 @@ export default defineConfig(({ mode }) => {
     // Vercel 部署时不需要 base 路径，GitHub Pages 需要
     const base = process.env.VERCEL ? '/' : '/resume_editor/';
     // 优先使用 Vercel 的环境变量，如果没有则使用 .env 文件
-    const geminiApiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY;
+    // 默认使用 yunwu.ai 的 API Key
+    const geminiApiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || 'sk-JKj8yYYz1tXcUdug3Tn1ubd1esBwKaLmNMMdBHZT7Y4MCwP8';
     return {
       base: base,
       server: {

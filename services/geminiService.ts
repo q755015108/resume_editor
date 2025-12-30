@@ -1,7 +1,76 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+const API_BASE_URL = 'https://yunwu.ai/v1beta';
+const MODEL_ID = 'gemini-3-flash-preview';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// 调用 yunwu.ai API
+async function callYunwuAI(prompt: string, systemInstruction?: string, options?: {
+  temperature?: number;
+  responseMimeType?: string;
+}) {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API Key is missing");
+  }
+
+  const url = `${API_BASE_URL}/models/${MODEL_ID}:generateContent`;
+  
+  const requestBody: any = {
+    contents: [{
+      parts: [{
+        text: prompt
+      }]
+    }]
+  };
+
+  if (systemInstruction) {
+    requestBody.systemInstruction = {
+      parts: [{
+        text: systemInstruction
+      }]
+    };
+  }
+
+  if (options?.temperature !== undefined) {
+    requestBody.generationConfig = {
+      temperature: options.temperature
+    };
+  }
+
+  if (options?.responseMimeType) {
+    if (!requestBody.generationConfig) {
+      requestBody.generationConfig = {};
+    }
+    requestBody.generationConfig.responseMimeType = options.responseMimeType;
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(JSON.stringify({
+      status: response.status,
+      statusText: response.statusText,
+      error: errorData
+    }));
+  }
+
+  const data = await response.json();
+  
+  // 解析响应
+  if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+    const text = data.candidates[0].content.parts[0].text;
+    return text;
+  }
+  
+  throw new Error("Invalid response format from API");
+}
 
 export async function polishContent(text: string, type: 'bullet' | 'summary' | 'education'): Promise<string> {
   if (!process.env.API_KEY) return text;
@@ -13,16 +82,10 @@ export async function polishContent(text: string, type: 'bullet' | 'summary' | '
   };
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-pro", // 使用稳定的免费模型
-      contents: text,
-      config: {
-        systemInstruction: systemInstructions[type],
-        temperature: 0.7,
-      },
+    const result = await callYunwuAI(text, systemInstructions[type], {
+      temperature: 0.7
     });
-    
-    return response.text?.trim() || text;
+    return result?.trim() || text;
   } catch (error) {
     console.error("Gemini Error:", error);
     return text;
@@ -75,21 +138,17 @@ export async function parseResumeFromText(rawText: string): Promise<any> {
       throw new Error("API Key is missing. Please check environment variable GEMINI_API_KEY.");
     }
     
-    console.log("Calling Gemini API with model: gemini-pro");
-    const response = await ai.models.generateContent({
-      model: "gemini-pro", // 使用稳定的免费模型
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-      },
+    console.log("Calling Yunwu AI with model:", MODEL_ID);
+    const responseText = await callYunwuAI(prompt, undefined, {
+      responseMimeType: "application/json",
+      temperature: 0.1
     });
 
-    if (!response.text) {
-      throw new Error("Gemini API returned empty response");
+    if (!responseText) {
+      throw new Error("API returned empty response");
     }
 
-    const result = JSON.parse(response.text);
+    const result = JSON.parse(responseText);
     return result;
   } catch (error: any) {
     console.error("AI Parse Error Details:", error);
