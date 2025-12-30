@@ -240,7 +240,7 @@ ${rawText}
         console.log("使用正则表达式提取 JSON，长度:", jsonText.length);
       } else {
         // 方法3: 使用更智能的 JSON 提取 - 找到所有可能的 JSON 对象
-      const jsonCandidates: Array<{text: string, score: number}> = [];
+        const jsonCandidates: Array<{text: string, score: number}> = [];
       
       // 找到所有 { 的位置
       const openBraces: number[] = [];
@@ -417,7 +417,7 @@ ${rawText}
     }
 
     // 尝试解析 JSON，如果失败会抛出更详细的错误
-    let result;
+    let result: any;
     try {
       result = JSON.parse(jsonText);
     } catch (parseError: any) {
@@ -494,6 +494,7 @@ ${rawText}
         }
       }
     }
+    
     return result;
   } catch (error: any) {
     console.error("AI Parse Error Details:", error);
