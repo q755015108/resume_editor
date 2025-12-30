@@ -132,15 +132,15 @@ ${rawText}
     let jsonText = responseText.trim();
     
     console.log("Raw API response length:", jsonText.length);
-    console.log("Raw API response preview:", jsonText.substring(0, 500)); // 打印前500个字符用于调试
+    console.log("Raw API response preview:", jsonText.substring(0, 1000)); // 打印前1000个字符用于调试
     
     // 方法1: 如果响应被包裹在代码块中，提取出来
     const codeBlockMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
     if (codeBlockMatch) {
       jsonText = codeBlockMatch[1];
     } else {
-      // 方法2: 使用更智能的 JSON 提取 - 找到所有可能的 JSON 对象，选择最长的
-      const jsonCandidates: string[] = [];
+      // 方法2: 使用更智能的 JSON 提取 - 找到所有可能的 JSON 对象
+      const jsonCandidates: Array<{text: string, score: number}> = [];
       
       // 找到所有 { 的位置
       const openBraces: number[] = [];
@@ -149,6 +149,8 @@ ${rawText}
           openBraces.push(i);
         }
       }
+      
+      console.log(`找到 ${openBraces.length} 个可能的 JSON 起始位置`);
       
       // 对每个 {，尝试找到匹配的 }
       for (const startIndex of openBraces) {
@@ -166,36 +168,56 @@ ${rawText}
         }
         if (endIndex !== -1) {
           const candidate = jsonText.substring(startIndex, endIndex + 1);
-          // 验证是否是有效的 JSON
+          let score = 0;
+          
+          // 评分系统：符合要求的 JSON 得分更高
           // 1. 必须包含引号（说明是 JSON 格式）
-          // 2. 不能包含占位符如 {...} 或 ...
-          // 3. 长度要足够（至少 50 字符）
-          if (candidate.includes('"') && 
-              candidate.length > 50 &&
-              !candidate.includes('{...}') &&
+          if (candidate.includes('"')) score += 10;
+          // 2. 包含必要的字段
+          if (candidate.includes('"personal"')) score += 20;
+          if (candidate.includes('"pages"')) score += 20;
+          if (candidate.includes('"name"')) score += 5;
+          if (candidate.includes('"sections"')) score += 5;
+          // 3. 长度要足够（至少 100 字符）
+          if (candidate.length > 100) score += 10;
+          if (candidate.length > 500) score += 10;
+          // 4. 不能包含占位符
+          if (!candidate.includes('{...}') && 
               !candidate.match(/\{[^}]*\.\.\.[^}]*\}/) &&
               !candidate.match(/\.\.\.[^}]*\}/)) {
-            // 尝试预解析，确保是有效的 JSON
+            score += 10;
+          }
+          
+          // 如果得分足够高，尝试预解析
+          if (score >= 30) {
             try {
               JSON.parse(candidate);
-              jsonCandidates.push(candidate);
+              // 如果能解析，额外加分
+              score += 50;
+              jsonCandidates.push({text: candidate, score});
             } catch (e) {
-              // 不是有效的 JSON，跳过
+              // 不能解析，但可能可以修复，仍然加入候选
+              jsonCandidates.push({text: candidate, score});
             }
           }
         }
       }
       
-      // 选择最长的候选 JSON（通常是最完整的）
+      // 选择得分最高的候选 JSON
       if (jsonCandidates.length > 0) {
-        jsonCandidates.sort((a, b) => b.length - a.length);
-        jsonText = jsonCandidates[0];
+        jsonCandidates.sort((a, b) => b.score - a.score);
+        jsonText = jsonCandidates[0].text;
+        console.log(`选择了得分 ${jsonCandidates[0].score} 的 JSON 候选`);
       } else {
         // 如果还是找不到，尝试从第一个 { 到最后一个 }
         const firstBrace = jsonText.indexOf('{');
         const lastBrace = jsonText.lastIndexOf('}');
         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
           jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+          console.log("使用第一个 { 到最后一个 } 之间的文本");
+        } else {
+          // 如果连 { 和 } 都找不到，说明响应中根本没有 JSON
+          throw new Error(`API 响应中没有找到 JSON 对象。响应内容: ${jsonText.substring(0, 500)}...`);
         }
       }
     }
@@ -214,8 +236,35 @@ ${rawText}
     console.log("Extracted JSON text preview:", jsonText.substring(0, 1000)); // 打印前1000个字符用于调试
 
     // 验证是否是有效的 JSON
-    if (!jsonText.startsWith('{') || !jsonText.endsWith('}')) {
-      throw new Error(`API 返回的不是有效的 JSON 格式。返回内容: ${responseText.substring(0, 500)}...`);
+    if (!jsonText || !jsonText.startsWith('{') || !jsonText.endsWith('}')) {
+      // 如果提取的文本不是以 { 开头，尝试找到第一个 {
+      if (!jsonText.startsWith('{')) {
+        const firstBrace = jsonText.indexOf('{');
+        if (firstBrace !== -1) {
+          jsonText = jsonText.substring(firstBrace);
+          // 找到匹配的最后一个 }
+          let braceCount = 0;
+          let endIndex = -1;
+          for (let i = 0; i < jsonText.length; i++) {
+            if (jsonText[i] === '{') braceCount++;
+            if (jsonText[i] === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                endIndex = i;
+                break;
+              }
+            }
+          }
+          if (endIndex !== -1) {
+            jsonText = jsonText.substring(0, endIndex + 1);
+          }
+        }
+      }
+      
+      // 再次验证
+      if (!jsonText || !jsonText.startsWith('{') || !jsonText.endsWith('}')) {
+        throw new Error(`API 返回的不是有效的 JSON 格式。返回内容: ${responseText.substring(0, 500)}...`);
+      }
     }
     
     // 验证 JSON 格式：检查基本的 JSON 结构
