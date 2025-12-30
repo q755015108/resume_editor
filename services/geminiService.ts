@@ -116,9 +116,10 @@ ${rawText}
     }
     
     console.log("Calling Yunwu AI with model:", MODEL_ID);
+    // 强制使用 JSON 格式输出
     const responseText = await callYunwuAI(prompt, systemInstruction, {
       responseMimeType: "application/json",
-      temperature: 0  // 降低到 0 以获得更确定性的输出
+      temperature: 0  // 最低温度，确保输出确定性
     });
 
     if (!responseText) {
