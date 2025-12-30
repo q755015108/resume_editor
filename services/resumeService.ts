@@ -121,10 +121,20 @@ export async function generateResumeContent(userInput: string): Promise<any> {
     if (data.candidates && data.candidates[0] && data.candidates[0].content) {
       const text = data.candidates[0].content.parts[0].text;
       
+      // 调试：打印完整的 API 响应
+      console.log('=== API 完整响应 ===');
+      console.log('响应长度:', text.length);
+      console.log('前500字符:', text.substring(0, 500));
+      console.log('后500字符:', text.substring(Math.max(0, text.length - 500)));
+      console.log('包含 ** 标记:', text.includes('**'));
+      console.log('包含 ``` 标记:', text.includes('```'));
+      console.log('包含 JSON 代码块:', text.includes('```json'));
+      console.log('第一个 { 位置:', text.indexOf('{'));
+      console.log('最后一个 } 位置:', text.lastIndexOf('}'));
+      console.log('==================');
+      
       // 提取 JSON（可能被包裹在代码块中或包含 Markdown）
       let jsonText = text.trim();
-      
-      console.log('原始 API 响应:', jsonText.substring(0, 500)); // 调试用
       
       // 方法1: 移除可能的 markdown 代码块标记
       jsonText = jsonText.replace(/^```json\s*/g, '');
