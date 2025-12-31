@@ -241,15 +241,13 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       let jsonText = text.trim();
       
       // 方法0: 直接移除或修复 photo 字段（照片由用户上传，不需要从 JSON 中读取）
-      // 使用更强大的正则表达式，匹配所有可能的 photo 字段情况
-      // 1. 匹配完整的 photo 字段（有闭合引号）
-      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*"/g, '"photo": ""');
-      // 2. 匹配 photo URL 被截断的情况（没有闭合引号，后面跟着其他字段）
-      jsonText = jsonText.replace(/"photo"\s*:\s*"https:[^"]*?(?=\s*"items"|\s*"pages"|\s*"name"|\s*"objective"|,|\n|})/g, '"photo": ""');
-      // 3. 匹配任何 photo 字段（包括空值、不完整值等）
-      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*?(?="|,|\n|\}|$)/g, '"photo": ""');
-      // 4. 最后再清理一次，确保所有 photo 都被替换
-      jsonText = jsonText.replace(/"photo"\s*:\s*[^,}\n]*/g, '"photo": ""');
+      // 使用最简单直接的方法：匹配 "photo": 到下一个字段之间的所有内容
+      // 先匹配完整的 photo 字段（有闭合引号）
+      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*"\s*,?\s*/g, '');
+      // 再匹配 photo URL 被截断的情况（没有闭合引号，直接到下一个字段）
+      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|\s*"name"|\s*"objective"|\s*"id"|\s*"label"|\s*"value"|\s*"sections"|\s*"content"|\s*"type"|\s*"title"|\s*"iconName"|\s*"period"|\s*"school"|\s*"major"|\s*"degree"|\s*"gpa"|\s*"courses"|\s*"organization"|\s*"role"|\s*"summary"|\s*"points"|\s*"subtitle"|\s*"detail"|\s*"id"|\s*"personal"|\s*"pages"|\s*"}\s*"|,|\n|\})/g, '');
+      // 最后匹配任何剩余的 photo 字段
+      jsonText = jsonText.replace(/"photo"\s*:\s*[^,}\n]*/g, '');
       
       // 方法1: 移除可能的 markdown 代码块标记
       jsonText = jsonText.replace(/^```json\s*/g, '');
