@@ -305,6 +305,7 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       }
       
       // 从第一个 { 开始，找到匹配的最后一个 }
+      // 注意：这里要找的是最外层的闭合括号，不是第一个匹配的
       let braceCount = 0;
       let lastBrace = -1;
       for (let i = firstBrace; i < jsonText.length; i++) {
@@ -319,10 +320,19 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       }
       
       if (lastBrace === -1) {
-        throw new Error('JSON 对象不完整，缺少闭合括号');
+        // 如果找不到匹配的闭合括号，尝试使用最后一个 }
+        lastBrace = jsonText.lastIndexOf('}');
+        if (lastBrace === -1) {
+          throw new Error('JSON 对象不完整，缺少闭合括号');
+        }
+        console.warn('⚠️ 未找到匹配的闭合括号，使用最后一个 }');
       }
       
-      jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+      const extractedJson = jsonText.substring(firstBrace, lastBrace + 1);
+      console.log('提取的 JSON 长度:', extractedJson.length);
+      console.log('提取的 JSON 前200字符:', extractedJson.substring(0, 200));
+      console.log('提取的 JSON 后200字符:', extractedJson.substring(Math.max(0, extractedJson.length - 200)));
+      jsonText = extractedJson;
       
       // 方法4: 清理可能的注释和多余内容
       // 移除 JSON 中不应该存在的注释（虽然标准 JSON 不支持注释）
