@@ -350,26 +350,47 @@ export async function generateResumeContent(userInput: string): Promise<any> {
         console.error('JSON 解析失败，尝试进一步修复...', parseError);
         console.error('错误位置:', parseError.message);
         
-        // 尝试找到错误位置附近的文本
+        // 尝试找到错误位置
+        let errorPos = -1;
         const errorMatch = parseError.message.match(/position (\d+)/);
         if (errorMatch) {
-          const errorPos = parseInt(errorMatch[1]);
+          errorPos = parseInt(errorMatch[1]);
           const start = Math.max(0, errorPos - 50);
           const end = Math.min(jsonText.length, errorPos + 50);
           console.error('错误位置附近的文本:', jsonText.substring(start, end));
         }
         
-        // 尝试修复换行符问题（在字符串值中的换行符应该被转义）
-        // 但要注意不要破坏 JSON 结构中的合法换行
+        // 尝试修复常见问题
         try {
-          // 更激进的修复：移除所有控制字符
-          let fixedJson = jsonText.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+          let fixedJson = jsonText;
+          
+          // 1. 移除所有控制字符（除了必要的空白字符）
+          fixedJson = fixedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+          
+          // 2. 修复 URL 中的特殊字符问题（确保 URL 被正确转义）
+          // 检查是否有未转义的 URL
+          fixedJson = fixedJson.replace(/("photo"\s*:\s*")([^"]*?)(http[^"]*?)(")/g, (match, p1, p2, url, p4) => {
+            // 确保 URL 中的特殊字符被正确转义
+            const escapedUrl = url.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            return p1 + p2 + escapedUrl + p4;
+          });
+          
+          // 3. 修复可能的尾随逗号
+          fixedJson = fixedJson.replace(/,(\s*[}\]])/g, '$1');
+          
+          // 4. 修复可能的缺失逗号（在 } 和 { 之间）
+          fixedJson = fixedJson.replace(/(\})\s*(\{)/g, '$1,$2');
+          fixedJson = fixedJson.replace(/(\})\s*(")/g, '$1,$2');
+          fixedJson = fixedJson.replace(/(\])\s*(\{)/g, '$1,$2');
+          
           result = JSON.parse(fixedJson);
           console.log('✅ 修复成功');
         } catch (secondError: any) {
           // 如果还是失败，返回更详细的错误信息
-          const errorPreview = jsonText.substring(Math.max(0, errorPos - 100), Math.min(jsonText.length, errorPos + 100));
-          throw new Error(`JSON 解析失败: ${parseError.message}\n错误位置: ${errorPos}\n错误附近文本: ${errorPreview}`);
+          const errorPreview = errorPos >= 0 
+            ? jsonText.substring(Math.max(0, errorPos - 100), Math.min(jsonText.length, errorPos + 100))
+            : jsonText.substring(0, 200);
+          throw new Error(`JSON 解析失败: ${parseError.message}${errorPos >= 0 ? `\n错误位置: ${errorPos}` : ''}\n错误附近文本: ${errorPreview}`);
         }
       }
       
