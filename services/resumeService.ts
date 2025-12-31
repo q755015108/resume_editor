@@ -369,10 +369,10 @@ export async function generateResumeContent(userInput: string): Promise<any> {
         try {
           let fixedJson = jsonText;
           
-          // 1. 直接移除 photo 字段（照片由用户上传，不需要从 JSON 中读取）
-          fixedJson = fixedJson.replace(/"photo"\s*:\s*"[^"]*"/g, '"photo": ""');
-          // 处理 photo URL 不完整的情况
-          fixedJson = fixedJson.replace(/"photo"\s*:\s*"https:[^"]*(?="|,|\n|})/g, '"photo": ""');
+          // 1. 完全移除 photo 字段（照片由用户上传，AI 返回的 photo 字段完全不需要）
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*"[^"]*"\s*,?\s*/g, ''); // 完整的 photo 字段
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|,|\n|\})/g, ''); // 被截断的 photo 字段
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*[^,}\n]+\s*,?\s*/g, ''); // 任何其他格式的 photo 字段
           
           // 3. 移除所有控制字符（除了必要的空白字符）
           fixedJson = fixedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
