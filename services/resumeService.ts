@@ -370,22 +370,10 @@ export async function generateResumeContent(userInput: string): Promise<any> {
         try {
           let fixedJson = jsonText;
           
-          // 1. 修复 URL 被截断的问题 - 如果 photo URL 不完整，使用默认值
-          fixedJson = fixedJson.replace(/"photo"\s*:\s*"https:[^"]*?(?="|,|\n|$)/g, (match) => {
-            // 如果 URL 不完整（没有闭合引号），使用默认图片
-            if (!match.endsWith('"')) {
-              console.warn('检测到 photo URL 不完整，使用默认图片');
-              return '"photo": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop"';
-            }
-            return match;
-          });
-          
-          // 2. 修复 URL 中的换行符和特殊字符
-          fixedJson = fixedJson.replace(/"photo"\s*:\s*"([^"]*?)"/g, (match, url) => {
-            // 移除 URL 中的换行符和控制字符
-            const cleanUrl = url.replace(/[\n\r\t]/g, '').trim();
-            return `"photo": "${cleanUrl}"`;
-          });
+          // 1. 直接移除 photo 字段（照片由用户上传，不需要从 JSON 中读取）
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*"[^"]*"/g, '"photo": ""');
+          // 处理 photo URL 不完整的情况
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*"https:[^"]*(?="|,|\n|})/g, '"photo": ""');
           
           // 3. 移除所有控制字符（除了必要的空白字符）
           fixedJson = fixedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
