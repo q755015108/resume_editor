@@ -240,6 +240,13 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       // 提取 JSON（可能被包裹在代码块中或包含 Markdown）
       let jsonText = text.trim();
       
+      // 方法0: 直接移除或修复 photo 字段（照片由用户上传，不需要从 JSON 中读取）
+      // 移除 photo 字段，避免 URL 解析问题
+      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*"/g, '"photo": ""');
+      // 如果 photo URL 不完整（没有闭合引号），也移除它
+      jsonText = jsonText.replace(/"photo"\s*:\s*"https:[^"]*(?="|,|\n|$)/g, '"photo": ""');
+      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*?(?="|,|\n|})/g, '"photo": ""');
+      
       // 方法1: 移除可能的 markdown 代码块标记
       jsonText = jsonText.replace(/^```json\s*/g, '');
       jsonText = jsonText.replace(/^```\s*/g, '');
