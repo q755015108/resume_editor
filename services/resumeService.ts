@@ -241,10 +241,14 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       let jsonText = text.trim();
       
       // 方法0: 完全移除 photo 字段（照片由用户上传，AI 返回的 photo 字段完全不需要）
-      // 匹配 "photo": 后面到下一个字段或逗号之间的所有内容，包括引号内的任何内容
-      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*"\s*,?\s*/g, ''); // 完整的 photo 字段
-      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|,|\n|\})/g, ''); // 被截断的 photo 字段
-      jsonText = jsonText.replace(/"photo"\s*:\s*[^,}\n]+\s*,?\s*/g, ''); // 任何其他格式的 photo 字段
+      // 使用最简单直接的方法：找到 "photo": 然后删除到下一个字段之前的所有内容
+      // 先处理完整的 photo 字段（有闭合引号和逗号）
+      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*"\s*,?\s*/g, '');
+      // 再处理被截断的 photo 字段（没有闭合引号，直接到 "items"）
+      jsonText = jsonText.replace(/"photo"\s*:\s*"https:[^"]*?(?=\s*"items")/g, '');
+      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|,|\n|\})/g, '');
+      // 最后处理任何剩余的 photo 字段
+      jsonText = jsonText.replace(/"photo"\s*:\s*[^,}\n]+/g, '');
       
       // 方法1: 移除可能的 markdown 代码块标记
       jsonText = jsonText.replace(/^```json\s*/g, '');
