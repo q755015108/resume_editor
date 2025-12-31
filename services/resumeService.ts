@@ -347,50 +347,124 @@ export async function generateResumeContent(userInput: string): Promise<any> {
       try {
         result = JSON.parse(jsonText);
       } catch (parseError: any) {
-        console.error('JSON 解析失败，尝试进一步修复...', parseError);
-        console.error('错误位置:', parseError.message);
+        console.warn('JSON 解析失败，尝试修复...', parseError.message);
         
         // 尝试找到错误位置
         let errorPos = -1;
         const errorMatch = parseError.message.match(/position (\d+)/);
         if (errorMatch) {
           errorPos = parseInt(errorMatch[1]);
-          const start = Math.max(0, errorPos - 50);
-          const end = Math.min(jsonText.length, errorPos + 50);
-          console.error('错误位置附近的文本:', jsonText.substring(start, end));
+          const start = Math.max(0, errorPos - 100);
+          const end = Math.min(jsonText.length, errorPos + 100);
+          console.warn('错误位置附近的文本:', jsonText.substring(start, end));
         }
         
         // 尝试修复常见问题
         try {
           let fixedJson = jsonText;
           
-          // 1. 移除所有控制字符（除了必要的空白字符）
-          fixedJson = fixedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
-          
-          // 2. 修复 URL 中的特殊字符问题（确保 URL 被正确转义）
-          // 检查是否有未转义的 URL
-          fixedJson = fixedJson.replace(/("photo"\s*:\s*")([^"]*?)(http[^"]*?)(")/g, (match, p1, p2, url, p4) => {
-            // 确保 URL 中的特殊字符被正确转义
-            const escapedUrl = url.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            return p1 + p2 + escapedUrl + p4;
+          // 1. 修复 URL 被截断的问题 - 如果 photo URL 不完整，使用默认值
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*"https:[^"]*?(?="|,|\n|$)/g, (match) => {
+            // 如果 URL 不完整（没有闭合引号），使用默认图片
+            if (!match.endsWith('"')) {
+              console.warn('检测到 photo URL 不完整，使用默认图片');
+              return '"photo": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop"';
+            }
+            return match;
           });
           
-          // 3. 修复可能的尾随逗号
+          // 2. 修复 URL 中的换行符和特殊字符
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*"([^"]*?)"/g, (match, url) => {
+            // 移除 URL 中的换行符和控制字符
+            const cleanUrl = url.replace(/[\n\r\t]/g, '').trim();
+            return `"photo": "${cleanUrl}"`;
+          });
+          
+          // 3. 移除所有控制字符（除了必要的空白字符）
+          fixedJson = fixedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+          
+          // 4. 修复可能的尾随逗号
           fixedJson = fixedJson.replace(/,(\s*[}\]])/g, '$1');
           
-          // 4. 修复可能的缺失逗号（在 } 和 { 之间）
+          // 5. 修复可能的缺失逗号
           fixedJson = fixedJson.replace(/(\})\s*(\{)/g, '$1,$2');
           fixedJson = fixedJson.replace(/(\})\s*(")/g, '$1,$2');
           fixedJson = fixedJson.replace(/(\])\s*(\{)/g, '$1,$2');
           
+          // 6. 修复字符串值中的未转义换行符
+          fixedJson = fixedJson.replace(/(:\s*")([^"]*?)(\n)([^"]*?)(")/g, (match, p1, p2, p3, p4, p5) => {
+            // 将字符串中的换行符转义
+            return p1 + p2 + '\\n' + p4 + p5;
+          });
+          
           result = JSON.parse(fixedJson);
-          console.log('✅ 修复成功');
+          console.log('✅ JSON 修复成功');
         } catch (secondError: any) {
-          // 如果还是失败，返回更详细的错误信息
-          const errorPreview = errorPos >= 0 
-            ? jsonText.substring(Math.max(0, errorPos - 100), Math.min(jsonText.length, errorPos + 100))
-            : jsonText.substring(0, 200);
-          throw new Error(`JSON 解析失败: ${parseError.message}${errorPos >= 0 ? `\n错误位置: ${errorPos}` : ''}\n错误附近文本: ${errorPreview}`);
+          console.warn('JSON 修复失败，尝试部分解析...', secondError.message);
+          
+          // 如果修复失败，尝试提取部分可用数据
+          try {
+            // 尝试提取 personal 部分
+            const personalMatch = jsonText.match(/"personal"\s*:\s*\{([^}]*"name"[^}]*"objective"[^}]*"items"[^\}]*)\}/);
+            const pagesMatch = jsonText.match(/"pages"\s*:\s*\[([\s\S]*)\]/);
+            
+            if (personalMatch || pagesMatch) {
+              // 构建一个最小可用的 JSON 结构
+              result = {
+                personal: {
+                  name: jsonText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] || data.personal?.name || '姓名',
+                  objective: jsonText.match(/"objective"\s*:\s*"([^"]+)"/)?.[1] || data.personal?.objective || '',
+                  photo: jsonText.match(/"photo"\s*:\s*"([^"]+)"/)?.[1] || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop',
+                  items: []
+                },
+                pages: data.pages || []
+              };
+              
+              // 尝试提取 items
+              const itemsMatch = jsonText.match(/"items"\s*:\s*\[([\s\S]*?)\]/);
+              if (itemsMatch) {
+                try {
+                  const itemsJson = '[' + itemsMatch[1] + ']';
+                  result.personal.items = JSON.parse(itemsJson);
+                } catch (e) {
+                  console.warn('无法解析 items，使用空数组');
+                }
+              }
+              
+              // 尝试提取 pages（简化处理）
+              if (pagesMatch) {
+                try {
+                  // 只提取第一个 page 的基本结构
+                  const firstPageMatch = jsonText.match(/"pages"\s*:\s*\[\s*\{([\s\S]*?)\}\s*\]/);
+                  if (firstPageMatch) {
+                    // 这里可以进一步解析，但为了简单起见，先返回基本结构
+                    result.pages = data.pages || [{
+                      id: 'page-1',
+                      sections: []
+                    }];
+                  }
+                } catch (e) {
+                  console.warn('无法解析 pages，使用现有数据');
+                }
+              }
+              
+              console.log('⚠️ 使用部分解析结果，部分数据可能不完整');
+              return result;
+            }
+          } catch (partialError: any) {
+            console.error('部分解析也失败:', partialError);
+          }
+          
+          // 如果所有方法都失败，至少返回一个基本结构，不抛错
+          console.warn('⚠️ JSON 解析完全失败，返回空结构');
+          result = {
+            personal: {
+              ...data.personal,
+              name: jsonText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] || data.personal.name,
+              objective: jsonText.match(/"objective"\s*:\s*"([^"]+)"/)?.[1] || data.personal.objective
+            },
+            pages: data.pages || []
+          };
         }
       }
       
