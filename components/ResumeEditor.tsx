@@ -33,12 +33,15 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
       const generatedData = await generateResumeContent(userInput);
       
       if (generatedData) {
-        // 合并生成的数据
+        // 合并生成的数据，但忽略 photo（照片由用户上传）
+        const { photo, ...personalWithoutPhoto } = generatedData.personal || {};
         onChange({
           ...data,
           personal: {
             ...data.personal,
-            ...generatedData.personal,
+            ...personalWithoutPhoto,
+            // 保留用户已有的照片，如果没有则使用默认值
+            photo: data.personal.photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop',
             items: generatedData.personal?.items || data.personal.items
           },
           pages: generatedData.pages || data.pages
