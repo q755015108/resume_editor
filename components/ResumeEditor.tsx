@@ -16,21 +16,41 @@ interface ResumeEditorProps {
 const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const [isAutoFillOpen, setIsAutoFillOpen] = useState(false);
   const [userInput, setUserInput] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
+  const [mode, setMode] = useState<'extract' | 'optimize'>('extract'); // 'extract': 信息提取, 'optimize': 智能优化
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const imageInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleAutoFill = async () => {
-    if (!userInput.trim()) {
-      setGenerateError('请输入基本信息');
-      return;
+    // 验证输入
+    if (mode === 'extract') {
+      if (!userInput.trim() && !uploadedImage) {
+        setGenerateError('请上传简历图片或输入基本信息');
+        return;
+      }
+    } else {
+      if (!userInput.trim() && !uploadedImage) {
+        setGenerateError('请上传简历图片或输入当前简历内容');
+        return;
+      }
+      if (!jobDescription.trim()) {
+        setGenerateError('请输入目标岗位描述');
+        return;
+      }
     }
 
     setIsGenerating(true);
     setGenerateError('');
 
     try {
-      const generatedData = await generateResumeContent(userInput);
+      const generatedData = await generateResumeContent(
+        userInput, 
+        uploadedImage || undefined,
+        mode === 'optimize' ? jobDescription : undefined
+      );
       
       if (generatedData) {
         // 合并生成的数据，但忽略 photo（照片由用户上传）
@@ -49,6 +69,8 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
         
         setIsAutoFillOpen(false);
         setUserInput('');
+        setJobDescription('');
+        setUploadedImage(null);
       }
     } catch (err: any) {
       setGenerateError(err.message || '生成失败，请稍后重试');
@@ -56,6 +78,36 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleImageUploadForOCR = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // 检查文件类型
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件');
+      return;
+    }
+
+    // 检查文件大小（限制为 10MB，OCR需要更大的图片）
+    if (file.size > 10 * 1024 * 1024) {
+      alert('图片大小不能超过 10MB');
+      return;
+    }
+
+    // 读取文件并转换为 base64
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (result) {
+        setUploadedImage(result);
+      }
+    };
+    reader.onerror = () => {
+      alert('图片读取失败，请重试');
+    };
+    reader.readAsDataURL(file);
   };
 
   const updatePersonalField = (field: 'name' | 'objective' | 'photo', value: string) => {
@@ -151,8 +203,10 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-gray-800">AI 一键填写简历</h2>
-                  <p className="text-xs text-gray-400">输入基本信息，AI 将自动生成完整简历</p>
+                  <h2 className="text-lg font-black text-gray-800">AI 智能简历助手</h2>
+                  <p className="text-xs text-gray-400">
+                    {mode === 'extract' ? '上传图片或输入信息，AI 将自动生成完整简历' : '根据岗位描述，AI 将智能优化你的简历'}
+                  </p>
                 </div>
               </div>
               <button 
@@ -165,21 +219,155 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
             </div>
             
             <div className="p-6 flex-1 overflow-y-auto">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
-                请输入你的基本信息
-              </label>
-              <textarea 
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                placeholder="例如：
+              {/* 模式选择 */}
+              <div className="mb-4 flex gap-2">
+                <button
+                  onClick={() => {
+                    setMode('extract');
+                    setJobDescription('');
+                  }}
+                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    mode === 'extract'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  信息提取
+                </button>
+                <button
+                  onClick={() => setMode('optimize')}
+                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    mode === 'optimize'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  智能优化
+                </button>
+              </div>
+
+              {mode === 'extract' ? (
+                <>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                    上传简历图片或输入基本信息
+                  </label>
+                  
+                  {/* 图片上传 */}
+                  <div className="mb-4">
+                    <input
+                      type="file"
+                      ref={imageInputRef}
+                      accept="image/*"
+                      onChange={handleImageUploadForOCR}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full p-4 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 text-sm text-gray-600"
+                      disabled={isGenerating}
+                    >
+                      <ImageIcon className="w-5 h-5" />
+                      <span>{uploadedImage ? '已上传图片，点击重新上传' : '上传简历图片（支持识别）'}</span>
+                    </button>
+                    {uploadedImage && (
+                      <div className="mt-2 relative">
+                        <img 
+                          src={uploadedImage} 
+                          alt="上传的简历图片" 
+                          className="w-full max-h-48 object-contain rounded-lg border border-gray-200"
+                        />
+                        <button
+                          onClick={() => setUploadedImage(null)}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-gray-400 mb-3 text-center">或</div>
+
+                  {/* 文本输入 */}
+                  <textarea 
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    placeholder="例如：
 姓名：张三
 学校：北京大学
 专业：计算机科学与技术
 学历：本科
 工作经历：曾在腾讯公司担任前端开发工程师，负责微信小程序开发..."
-                className="w-full h-64 p-4 border-2 border-gray-100 rounded-2xl focus:border-blue-500 outline-none text-sm leading-relaxed resize-none custom-scrollbar"
-                disabled={isGenerating}
-              ></textarea>
+                    className="w-full h-48 p-4 border-2 border-gray-100 rounded-2xl focus:border-blue-500 outline-none text-sm leading-relaxed resize-none custom-scrollbar"
+                    disabled={isGenerating}
+                  ></textarea>
+                </>
+              ) : (
+                <>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                    当前简历内容
+                  </label>
+                  
+                  {/* 图片上传 */}
+                  <div className="mb-4">
+                    <input
+                      type="file"
+                      ref={imageInputRef}
+                      accept="image/*"
+                      onChange={handleImageUploadForOCR}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full p-4 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 text-sm text-gray-600"
+                      disabled={isGenerating}
+                    >
+                      <ImageIcon className="w-5 h-5" />
+                      <span>{uploadedImage ? '已上传简历图片，点击重新上传' : '上传当前简历图片（可选）'}</span>
+                    </button>
+                    {uploadedImage && (
+                      <div className="mt-2 relative">
+                        <img 
+                          src={uploadedImage} 
+                          alt="上传的简历图片" 
+                          className="w-full max-h-48 object-contain rounded-lg border border-gray-200"
+                        />
+                        <button
+                          onClick={() => setUploadedImage(null)}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <textarea 
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    placeholder="输入当前简历内容，或留空（如果已上传图片）..."
+                    className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl focus:border-blue-500 outline-none text-sm leading-relaxed resize-none custom-scrollbar mb-4"
+                    disabled={isGenerating}
+                  ></textarea>
+
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                    目标岗位描述
+                  </label>
+                  <textarea 
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    placeholder="例如：
+职位：前端开发工程师
+要求：
+- 3年以上前端开发经验
+- 熟悉 React、Vue 等框架
+- 有移动端开发经验
+- 熟悉 TypeScript..."
+                    className="w-full h-48 p-4 border-2 border-gray-100 rounded-2xl focus:border-blue-500 outline-none text-sm leading-relaxed resize-none custom-scrollbar"
+                    disabled={isGenerating}
+                  ></textarea>
+                </>
+              )}
               
               {generateError && (
                 <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-500 text-xs flex items-center gap-2">
@@ -189,11 +377,19 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
 
               <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl text-blue-600 text-xs">
                 <p className="font-semibold mb-1">💡 提示：</p>
-                <ul className="list-disc list-inside space-y-1 text-blue-500">
-                  <li>可以输入姓名、学校、专业、工作经历等任意信息</li>
-                  <li>信息越详细，生成的简历越准确</li>
-                  <li>AI 会根据你提供的信息智能补充其他内容</li>
-                </ul>
+                {mode === 'extract' ? (
+                  <ul className="list-disc list-inside space-y-1 text-blue-500">
+                    <li>可以上传简历图片，AI 会自动识别图片中的内容</li>
+                    <li>也可以直接输入文本信息，信息越详细，生成的简历越准确</li>
+                    <li>AI 会根据你提供的信息智能补充其他内容</li>
+                  </ul>
+                ) : (
+                  <ul className="list-disc list-inside space-y-1 text-blue-500">
+                    <li>上传当前简历图片或输入简历内容</li>
+                    <li>输入目标岗位描述，AI 会根据岗位要求优化简历</li>
+                    <li>优化后的简历会更匹配目标岗位，提高通过率</li>
+                  </ul>
+                )}
               </div>
             </div>
 
@@ -207,18 +403,18 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
               </button>
               <button 
                 onClick={handleAutoFill}
-                disabled={isGenerating || !userInput.trim()}
+                disabled={isGenerating || (mode === 'extract' ? !userInput.trim() && !uploadedImage : (!userInput.trim() && !uploadedImage) || !jobDescription.trim())}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-200 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
               >
                 {isGenerating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>正在生成...</span>
+                    <span>{mode === 'extract' ? '正在识别...' : '正在优化...'}</span>
                   </>
                 ) : (
                   <>
                     <Wand2 className="w-4 h-4" />
-                    <span>生成简历</span>
+                    <span>{mode === 'extract' ? '生成简历' : '优化简历'}</span>
                   </>
                 )}
               </button>
