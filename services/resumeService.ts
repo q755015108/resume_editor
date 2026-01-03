@@ -60,7 +60,7 @@ async function optimizeResumeContent(
       temperature: 0.3,
       topP: 0.95,
       maxOutputTokens: 16384,
-      thinkingBudget: 0
+      thinkingBudget: 10000  // 开启思考模式，提升优化质量
     }
   };
 
