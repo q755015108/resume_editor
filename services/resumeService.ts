@@ -185,7 +185,6 @@ async function extractResumeFromText(
     }
   ]
 }`;
-  }
 
   const requestBody = {
     systemInstruction: {
