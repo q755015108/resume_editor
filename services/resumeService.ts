@@ -5,7 +5,7 @@ const API_KEY = 'sk-JKj8yYYz1tXcUdug3Tn1ubd1esBwKaLmNMMdBHZT7Y4MCwP8';
 // 第一步：优化简历内容（根据岗位描述优化，输出优化后的文本）
 async function optimizeResumeContent(
   userInput: string,
-  imageBase64?: string,
+  imagesBase64?: string[],
   jobDescription: string
 ): Promise<string> {
   const systemInstruction = `你是一个专业的简历优化专家。请根据目标岗位描述，优化用户的简历内容，使其更匹配目标岗位。
@@ -30,26 +30,31 @@ async function optimizeResumeContent(
         parts: (() => {
           const parts: any[] = [];
           
-          // 如果有图片，添加图片部分
-          if (imageBase64) {
-            let mimeType = 'image/jpeg';
-            if (imageBase64.startsWith('data:image/')) {
-              const match = imageBase64.match(/data:image\/([^;]+);base64,/);
-              if (match) {
-                mimeType = `image/${match[1]}`;
+          // 如果有图片，添加图片部分（支持多张图片）
+          if (imagesBase64 && imagesBase64.length > 0) {
+            imagesBase64.forEach((imageBase64) => {
+              let mimeType = 'image/jpeg';
+              if (imageBase64.startsWith('data:image/')) {
+                const match = imageBase64.match(/data:image\/([^;]+);base64,/);
+                if (match) {
+                  mimeType = `image/${match[1]}`;
+                }
               }
-            }
-            const base64Data = imageBase64.replace(/^data:image\/[^;]+;base64,/, '');
-            parts.push({
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data
-              }
+              const base64Data = imageBase64.replace(/^data:image\/[^;]+;base64,/, '');
+              parts.push({
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Data
+                }
+              });
             });
           }
           
           // 构建文本提示
-          const textPrompt = `当前简历内容：\n"""\n${userInput || '（从图片中识别）'}\n"""\n\n目标岗位描述：\n"""\n${jobDescription}\n"""\n\n请根据岗位描述优化简历内容，使其更匹配目标岗位。输出优化后的简历文本（纯文本格式，保持结构清晰）。`;
+          const imageHint = imagesBase64 && imagesBase64.length > 0 
+            ? (imagesBase64.length > 1 ? `（已上传 ${imagesBase64.length} 页简历图片，请识别所有页面）` : '（从图片中识别）')
+            : '';
+          const textPrompt = `当前简历内容：\n"""\n${userInput || imageHint}\n"""\n\n目标岗位描述：\n"""\n${jobDescription}\n"""\n\n请根据岗位描述优化简历内容，使其更匹配目标岗位。输出优化后的简历文本（纯文本格式，保持结构清晰）。`;
           
           parts.push({ text: textPrompt });
           return parts;
@@ -113,7 +118,7 @@ async function optimizeResumeContent(
 // 第二步：从文本解析为JSON结构（复用信息提取模式的逻辑）
 async function extractResumeFromText(
   resumeText: string,
-  imageBase64?: string
+  imagesBase64?: string[]
 ): Promise<any> {
   // 信息提取模式：从文本或图片中提取简历信息
   const systemInstruction = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本或图片，将其转换为 JSON 结构。
@@ -200,32 +205,35 @@ async function extractResumeFromText(
         parts: (() => {
           const parts: any[] = [];
           
-          // 如果有图片，添加图片部分
-          if (imageBase64) {
-            // 检测图片格式
-            let mimeType = 'image/jpeg';
-            if (imageBase64.startsWith('data:image/')) {
-              const match = imageBase64.match(/data:image\/([^;]+);base64,/);
-              if (match) {
-                mimeType = `image/${match[1]}`;
+          // 如果有图片，添加图片部分（支持多张图片）
+          if (imagesBase64 && imagesBase64.length > 0) {
+            imagesBase64.forEach((imageBase64) => {
+              // 检测图片格式
+              let mimeType = 'image/jpeg';
+              if (imageBase64.startsWith('data:image/')) {
+                const match = imageBase64.match(/data:image\/([^;]+);base64,/);
+                if (match) {
+                  mimeType = `image/${match[1]}`;
+                }
               }
-            }
-            
-            // 提取base64数据（去掉data:image/xxx;base64,前缀）
-            const base64Data = imageBase64.replace(/^data:image\/[^;]+;base64,/, '');
-            
-            parts.push({
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data
-              }
+              
+              // 提取base64数据（去掉data:image/xxx;base64,前缀）
+              const base64Data = imageBase64.replace(/^data:image\/[^;]+;base64,/, '');
+              
+              parts.push({
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Data
+                }
+              });
             });
           }
           
           // 构建文本提示（信息提取模式）
           let textPrompt = '';
-          if (imageBase64) {
-            textPrompt = `请识别图片中的简历内容，并按照规则提取并转换为 JSON 格式。${resumeText ? `\n\n补充信息：\n"""\n${resumeText}\n"""` : ''}`;
+          if (imagesBase64 && imagesBase64.length > 0) {
+            const pageHint = imagesBase64.length > 1 ? `（共 ${imagesBase64.length} 页，请识别所有页面内容）` : '';
+            textPrompt = `请识别图片中的简历内容${pageHint}，并按照规则提取并转换为 JSON 格式。${resumeText ? `\n\n补充信息：\n"""\n${resumeText}\n"""` : ''}`;
           } else {
             textPrompt = `文本内容：\n"""\n${resumeText}\n"""\n\n请按照规则提取并转换为 JSON 格式。`;
           }
@@ -633,10 +641,10 @@ async function extractResumeFromText(
   }
 }
 
-// 主函数：调用 API 生成简历内容（支持文本和图片）
+// 主函数：调用 API 生成简历内容（支持文本和多张图片）
 export async function generateResumeContent(
   userInput: string, 
-  imageBase64?: string,
+  imagesBase64?: string[],
   jobDescription?: string
 ): Promise<any> {
   // 如果有岗位描述，使用两步处理：先优化，再解析
@@ -647,7 +655,7 @@ export async function generateResumeContent(
     console.log('第一步：优化简历内容...');
     const optimizedText = await optimizeResumeContent(
       userInput,
-      imageBase64,
+      imagesBase64,
       jobDescription
     );
     console.log('✅ 第一步完成，优化后的文本长度:', optimizedText.length);
@@ -661,6 +669,6 @@ export async function generateResumeContent(
   } else {
     // 信息提取模式：直接解析
     console.log('=== 信息提取模式：直接解析 ===');
-    return await extractResumeFromText(userInput, imageBase64);
+    return await extractResumeFromText(userInput, imagesBase64);
   }
 }

@@ -17,7 +17,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const [isAutoFillOpen, setIsAutoFillOpen] = useState(false);
   const [userInput, setUserInput] = useState('');
   const [jobDescription, setJobDescription] = useState('');
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
   const [mode, setMode] = useState<'extract' | 'optimize'>('extract'); // 'extract': 信息提取, 'optimize': 智能优化
@@ -27,12 +27,12 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   const handleAutoFill = async () => {
     // 验证输入
     if (mode === 'extract') {
-      if (!userInput.trim() && !uploadedImage) {
+      if (!userInput.trim() && uploadedImages.length === 0) {
         setGenerateError('请上传简历图片或输入基本信息');
         return;
       }
     } else {
-      if (!userInput.trim() && !uploadedImage) {
+      if (!userInput.trim() && uploadedImages.length === 0) {
         setGenerateError('请上传简历图片或输入当前简历内容');
         return;
       }
@@ -48,7 +48,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
     try {
       const generatedData = await generateResumeContent(
         userInput, 
-        uploadedImage || undefined,
+        uploadedImages.length > 0 ? uploadedImages : undefined,
         mode === 'optimize' ? jobDescription : undefined
       );
       
@@ -70,7 +70,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
         setIsAutoFillOpen(false);
         setUserInput('');
         setJobDescription('');
-        setUploadedImage(null);
+        setUploadedImages([]);
       }
     } catch (err: any) {
       setGenerateError(err.message || '生成失败，请稍后重试');
@@ -81,33 +81,59 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
   };
 
   const handleImageUploadForOCR = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    // 检查文件类型
-    if (!file.type.startsWith('image/')) {
-      alert('请选择图片文件');
-      return;
-    }
+    const newImages: string[] = [];
+    let loadedCount = 0;
+    let errorCount = 0;
 
-    // 检查文件大小（限制为 10MB，OCR需要更大的图片）
-    if (file.size > 10 * 1024 * 1024) {
-      alert('图片大小不能超过 10MB');
-      return;
-    }
-
-    // 读取文件并转换为 base64
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        setUploadedImage(result);
+    // 处理多张图片
+    Array.from(files).forEach((file, index) => {
+      // 检查文件类型
+      if (!file.type.startsWith('image/')) {
+        errorCount++;
+        if (errorCount === 1) {
+          alert('请选择图片文件');
+        }
+        return;
       }
-    };
-    reader.onerror = () => {
-      alert('图片读取失败，请重试');
-    };
-    reader.readAsDataURL(file);
+
+      // 检查文件大小（限制为 10MB，OCR需要更大的图片）
+      if (file.size > 10 * 1024 * 1024) {
+        errorCount++;
+        if (errorCount === 1) {
+          alert(`图片 "${file.name}" 大小超过 10MB，已跳过`);
+        }
+        return;
+      }
+
+      // 读取文件并转换为 base64
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (result) {
+          newImages.push(result);
+        }
+        loadedCount++;
+        
+        // 所有文件读取完成后更新状态
+        if (loadedCount === files.length - errorCount) {
+          setUploadedImages(prev => [...prev, ...newImages]);
+        }
+      };
+      reader.onerror = () => {
+        errorCount++;
+        loadedCount++;
+        if (errorCount === 1) {
+          alert(`图片 "${file.name}" 读取失败`);
+        }
+        if (loadedCount === files.length - errorCount) {
+          setUploadedImages(prev => [...prev, ...newImages]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const updatePersonalField = (field: 'name' | 'objective' | 'photo', value: string) => {
@@ -258,6 +284,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                       type="file"
                       ref={imageInputRef}
                       accept="image/*"
+                      multiple
                       onChange={handleImageUploadForOCR}
                       className="hidden"
                     />
@@ -267,21 +294,28 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                       disabled={isGenerating}
                     >
                       <ImageIcon className="w-5 h-5" />
-                      <span>{uploadedImage ? '已上传图片，点击重新上传' : '上传简历图片（支持识别）'}</span>
+                      <span>{uploadedImages.length > 0 ? `已上传 ${uploadedImages.length} 张图片，点击添加更多` : '上传简历图片（支持多页，可多选）'}</span>
                     </button>
-                    {uploadedImage && (
-                      <div className="mt-2 relative">
-                        <img 
-                          src={uploadedImage} 
-                          alt="上传的简历图片" 
-                          className="w-full max-h-48 object-contain rounded-lg border border-gray-200"
-                        />
-                        <button
-                          onClick={() => setUploadedImage(null)}
-                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                    {uploadedImages.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {uploadedImages.map((image, index) => (
+                          <div key={index} className="relative">
+                            <img 
+                              src={image} 
+                              alt={`简历图片 ${index + 1}`}
+                              className="w-full max-h-48 object-contain rounded-lg border border-gray-200"
+                            />
+                            <button
+                              onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}
+                              className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                            <div className="absolute bottom-2 left-2 px-2 py-1 bg-black bg-opacity-50 text-white text-xs rounded">
+                              第 {index + 1} 页
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -314,6 +348,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                       type="file"
                       ref={imageInputRef}
                       accept="image/*"
+                      multiple
                       onChange={handleImageUploadForOCR}
                       className="hidden"
                     />
@@ -323,21 +358,28 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
                       disabled={isGenerating}
                     >
                       <ImageIcon className="w-5 h-5" />
-                      <span>{uploadedImage ? '已上传简历图片，点击重新上传' : '上传当前简历图片（可选）'}</span>
+                      <span>{uploadedImages.length > 0 ? `已上传 ${uploadedImages.length} 张图片，点击添加更多` : '上传当前简历图片（可选，支持多页）'}</span>
                     </button>
-                    {uploadedImage && (
-                      <div className="mt-2 relative">
-                        <img 
-                          src={uploadedImage} 
-                          alt="上传的简历图片" 
-                          className="w-full max-h-48 object-contain rounded-lg border border-gray-200"
-                        />
-                        <button
-                          onClick={() => setUploadedImage(null)}
-                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                    {uploadedImages.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {uploadedImages.map((image, index) => (
+                          <div key={index} className="relative">
+                            <img 
+                              src={image} 
+                              alt={`简历图片 ${index + 1}`}
+                              className="w-full max-h-48 object-contain rounded-lg border border-gray-200"
+                            />
+                            <button
+                              onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}
+                              className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                            <div className="absolute bottom-2 left-2 px-2 py-1 bg-black bg-opacity-50 text-white text-xs rounded">
+                              第 {index + 1} 页
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -403,7 +445,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ data, onChange }) => {
               </button>
               <button 
                 onClick={handleAutoFill}
-                disabled={isGenerating || (mode === 'extract' ? !userInput.trim() && !uploadedImage : (!userInput.trim() && !uploadedImage) || !jobDescription.trim())}
+                disabled={isGenerating || (mode === 'extract' ? !userInput.trim() && uploadedImages.length === 0 : (!userInput.trim() && uploadedImages.length === 0) || !jobDescription.trim())}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-200 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
               >
                 {isGenerating ? (
