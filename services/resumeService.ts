@@ -36,8 +36,7 @@ export async function generateResumeContent(
 4. 必须输出合法 JSON，所有 ID 使用随机字符串。
 5. 严禁输出任何 Markdown 标签（如 \`\`\`json、**、# 等）。
 6. 严禁输出任何解释性文字、思考过程或注释。
-7. 只输出纯 JSON，第一行必须是 {，最后一行必须是 }。`;
-  }
+7. 只输出纯 JSON，第一行必须是 {，最后一行必须是 }。
 
 输出 JSON 结构参考：
 {
@@ -97,6 +96,7 @@ export async function generateResumeContent(
     }
   ]
 }`;
+  }
 
   const requestBody = {
     systemInstruction: {
