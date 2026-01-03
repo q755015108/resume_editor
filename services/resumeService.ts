@@ -2,32 +2,121 @@
 const API_URL = 'https://yunwu.ai/v1beta/models/gemini-3-flash-preview:generateContent';
 const API_KEY = 'sk-JKj8yYYz1tXcUdug3Tn1ubd1esBwKaLmNMMdBHZT7Y4MCwP8';
 
-// 调用 API 生成简历内容（支持文本和图片）
-export async function generateResumeContent(
-  userInput: string, 
+// 第一步：优化简历内容（根据岗位描述优化，输出优化后的文本）
+async function optimizeResumeContent(
+  userInput: string,
   imageBase64?: string,
-  jobDescription?: string
-): Promise<any> {
-  // 根据是否有岗位描述，使用不同的系统指令
-  let systemInstruction = '';
-  
-  if (jobDescription && jobDescription.trim()) {
-    // 智能优化模式：根据岗位描述优化简历
-    systemInstruction = `你是一个专业的简历优化专家。请根据目标岗位描述，优化用户的简历内容，使其更匹配目标岗位。
+  jobDescription: string
+): Promise<string> {
+  const systemInstruction = `你是一个专业的简历优化专家。请根据目标岗位描述，优化用户的简历内容，使其更匹配目标岗位。
 
 规则：
 1. 分析岗位描述中的关键要求（技能、经验、学历等）
 2. 优化简历内容，突出与岗位匹配的部分
-3. 调整求职意向(objective)使其更贴合目标岗位
-4. 优化工作/项目经历描述，使用岗位描述中的关键词
-5. 保持原有信息的真实性，只进行优化和调整
-6. 必须输出合法 JSON，所有 ID 使用随机字符串
-7. 严禁输出任何 Markdown 标签（如 \`\`\`json、**、# 等）
-8. 严禁输出任何解释性文字、思考过程或注释
-9. 只输出纯 JSON，第一行必须是 {，最后一行必须是 }`;
-  } else {
-    // 信息提取模式：从文本或图片中提取简历信息
-    systemInstruction = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本或图片，将其转换为 JSON 结构。
+3. 简化冗余信息，删除与岗位无关的内容
+4. 调整求职意向使其更贴合目标岗位
+5. 优化工作/项目经历描述，使用岗位描述中的关键词
+6. 保持原有信息的真实性，只进行优化和调整
+7. 输出优化后的简历文本（纯文本格式，不要输出JSON）
+8. 保持简历的完整性和可读性`;
+
+  const requestBody = {
+    systemInstruction: {
+      parts: [{ text: systemInstruction }]
+    },
+    contents: [
+      {
+        role: 'user',
+        parts: (() => {
+          const parts: any[] = [];
+          
+          // 如果有图片，添加图片部分
+          if (imageBase64) {
+            let mimeType = 'image/jpeg';
+            if (imageBase64.startsWith('data:image/')) {
+              const match = imageBase64.match(/data:image\/([^;]+);base64,/);
+              if (match) {
+                mimeType = `image/${match[1]}`;
+              }
+            }
+            const base64Data = imageBase64.replace(/^data:image\/[^;]+;base64,/, '');
+            parts.push({
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data
+              }
+            });
+          }
+          
+          // 构建文本提示
+          const textPrompt = `当前简历内容：\n"""\n${userInput || '（从图片中识别）'}\n"""\n\n目标岗位描述：\n"""\n${jobDescription}\n"""\n\n请根据岗位描述优化简历内容，使其更匹配目标岗位。输出优化后的简历文本（纯文本格式，保持结构清晰）。`;
+          
+          parts.push({ text: textPrompt });
+          return parts;
+        })()
+      }
+    ],
+    generationConfig: {
+      temperature: 0.3,
+      topP: 0.95,
+      maxOutputTokens: 16384,
+      thinkingBudget: 0
+    }
+  };
+
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 调用失败: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.candidates && data.candidates[0]) {
+      let text = '';
+      if (data.candidates[0].content && data.candidates[0].content.parts) {
+        const parts = data.candidates[0].content.parts;
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          if (part.text && (part.thought === false || part.thought === undefined)) {
+            text = part.text;
+            break;
+          }
+        }
+        if (!text && parts.length > 0 && parts[parts.length - 1].text) {
+          text = parts[parts.length - 1].text;
+        }
+      }
+      
+      if (!text) {
+        throw new Error('API 响应中没有找到优化后的文本内容');
+      }
+      
+      return text.trim();
+    }
+    
+    throw new Error('API 返回格式不正确');
+  } catch (error: any) {
+    console.error('优化简历失败:', error);
+    throw new Error(error.message || '优化简历失败，请稍后重试');
+  }
+}
+
+// 第二步：从文本解析为JSON结构（复用信息提取模式的逻辑）
+async function extractResumeFromText(
+  resumeText: string,
+  imageBase64?: string
+): Promise<any> {
+  // 信息提取模式：从文本或图片中提取简历信息
+  const systemInstruction = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本或图片，将其转换为 JSON 结构。
 
 规则：
 1. 识别个人信息。注意：姓名(name)和求职意向(objective)是固定字段，其他信息（如电话、邮箱、出生地、生日等）请全部放入 items 数组中，每个项包含 id, label, value。
@@ -134,18 +223,12 @@ export async function generateResumeContent(
             });
           }
           
-          // 构建文本提示
+          // 构建文本提示（信息提取模式）
           let textPrompt = '';
-          if (jobDescription && jobDescription.trim()) {
-            // 智能优化模式
-            textPrompt = `当前简历内容：\n"""\n${userInput || '（从图片中识别）'}\n"""\n\n目标岗位描述：\n"""\n${jobDescription}\n"""\n\n请根据岗位描述优化简历内容，使其更匹配目标岗位。输出优化后的 JSON 格式。`;
+          if (imageBase64) {
+            textPrompt = `请识别图片中的简历内容，并按照规则提取并转换为 JSON 格式。${resumeText ? `\n\n补充信息：\n"""\n${resumeText}\n"""` : ''}`;
           } else {
-            // 信息提取模式
-            if (imageBase64) {
-              textPrompt = `请识别图片中的简历内容，并按照规则提取并转换为 JSON 格式。${userInput ? `\n\n补充信息：\n"""\n${userInput}\n"""` : ''}`;
-            } else {
-              textPrompt = `文本内容：\n"""\n${userInput}\n"""\n\n请按照规则提取并转换为 JSON 格式。`;
-            }
+            textPrompt = `文本内容：\n"""\n${resumeText}\n"""\n\n请按照规则提取并转换为 JSON 格式。`;
           }
           
           parts.push({
@@ -545,8 +628,39 @@ export async function generateResumeContent(
     
     throw new Error('API 返回格式不正确：没有找到 candidates');
   } catch (error: any) {
-    console.error('生成简历失败:', error);
-    throw new Error(error.message || '生成简历失败，请稍后重试');
+    console.error('解析简历失败:', error);
+    throw new Error(error.message || '解析简历失败，请稍后重试');
   }
 }
 
+// 主函数：调用 API 生成简历内容（支持文本和图片）
+export async function generateResumeContent(
+  userInput: string, 
+  imageBase64?: string,
+  jobDescription?: string
+): Promise<any> {
+  // 如果有岗位描述，使用两步处理：先优化，再解析
+  if (jobDescription && jobDescription.trim()) {
+    console.log('=== 智能优化模式：两步处理 ===');
+    
+    // 第一步：优化简历内容
+    console.log('第一步：优化简历内容...');
+    const optimizedText = await optimizeResumeContent(
+      userInput,
+      imageBase64,
+      jobDescription
+    );
+    console.log('✅ 第一步完成，优化后的文本长度:', optimizedText.length);
+    
+    // 第二步：将优化后的文本解析为JSON
+    console.log('第二步：解析为JSON结构...');
+    const result = await extractResumeFromText(optimizedText);
+    console.log('✅ 第二步完成');
+    
+    return result;
+  } else {
+    // 信息提取模式：直接解析
+    console.log('=== 信息提取模式：直接解析 ===');
+    return await extractResumeFromText(userInput, imageBase64);
+  }
+}
