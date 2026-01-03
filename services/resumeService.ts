@@ -8,6 +8,22 @@ async function optimizeResumeContent(
   imagesBase64?: string[],
   jobDescription: string
 ): Promise<string> {
+  // 日志：输入信息
+  console.log('=== 第一步：优化简历内容 ===');
+  console.log('输入参数：');
+  console.log('- 用户输入文本长度:', userInput.length);
+  console.log('- 用户输入文本预览:', userInput.substring(0, 200) + (userInput.length > 200 ? '...' : ''));
+  console.log('- 图片数量:', imagesBase64?.length || 0);
+  if (imagesBase64 && imagesBase64.length > 0) {
+    imagesBase64.forEach((img, index) => {
+      const sizeKB = Math.round((img.length * 3) / 4 / 1024);
+      console.log(`  - 图片 ${index + 1}: ${sizeKB}KB`);
+    });
+  }
+  console.log('- 岗位描述长度:', jobDescription.length);
+  console.log('- 岗位描述预览:', jobDescription.substring(0, 200) + (jobDescription.length > 200 ? '...' : ''));
+  console.log('======================');
+  
   const systemInstruction = `你是一个专业的简历优化专家。请根据目标岗位描述，优化用户的简历内容，使其更匹配目标岗位。
 
 规则：
@@ -56,6 +72,28 @@ async function optimizeResumeContent(
             : '';
           const textPrompt = `当前简历内容：\n"""\n${userInput || imageHint}\n"""\n\n目标岗位描述：\n"""\n${jobDescription}\n"""\n\n请根据岗位描述优化简历内容，使其更匹配目标岗位。输出优化后的简历文本（纯文本格式，保持结构清晰）。`;
           
+          // 日志：请求内容
+          console.log('=== 第一步：API 请求内容 ===');
+          console.log('System Instruction 长度:', systemInstruction.length);
+          console.log('User Prompt 长度:', textPrompt.length);
+          console.log('Parts 数量:', parts.length);
+          console.log('Parts 详情:');
+          parts.forEach((part, index) => {
+            if (part.inlineData) {
+              console.log(`  - Part ${index}: 图片 (${Math.round((part.inlineData.data.length * 3) / 4 / 1024)}KB)`);
+            } else if (part.text) {
+              console.log(`  - Part ${index}: 文本 (${part.text.length} 字符)`);
+              console.log(`    文本预览: ${part.text.substring(0, 150)}...`);
+            }
+          });
+          console.log('Generation Config:', {
+            temperature: 0.3,
+            topP: 0.95,
+            maxOutputTokens: 16384,
+            thinkingBudget: 10000
+          });
+          console.log('========================');
+          
           parts.push({ text: textPrompt });
           return parts;
         })()
@@ -85,25 +123,57 @@ async function optimizeResumeContent(
 
     const data = await response.json();
     
+    // 日志：API 响应
+    console.log('=== 第一步：API 响应 ===');
+    console.log('响应状态:', response.status, response.statusText);
+    console.log('响应 keys:', Object.keys(data));
+    if (data.usageMetadata) {
+      console.log('Token 使用情况:', {
+        promptTokenCount: data.usageMetadata.promptTokenCount,
+        candidatesTokenCount: data.usageMetadata.candidatesTokenCount,
+        totalTokenCount: data.usageMetadata.totalTokenCount
+      });
+    }
+    console.log('Candidates 数量:', data.candidates?.length || 0);
+    
     if (data.candidates && data.candidates[0]) {
       let text = '';
       if (data.candidates[0].content && data.candidates[0].content.parts) {
         const parts = data.candidates[0].content.parts;
+        console.log('Parts 数量:', parts.length);
+        console.log('Parts 详情:');
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i];
+          console.log(`  - Part ${i}:`, {
+            hasText: !!part.text,
+            textLength: part.text?.length || 0,
+            thought: part.thought,
+            textPreview: part.text?.substring(0, 150) + (part.text && part.text.length > 150 ? '...' : '')
+          });
+          
           if (part.text && (part.thought === false || part.thought === undefined)) {
             text = part.text;
+            console.log(`✅ 找到非思考过程的文本，使用 part[${i}]`);
             break;
           }
         }
         if (!text && parts.length > 0 && parts[parts.length - 1].text) {
           text = parts[parts.length - 1].text;
+          console.log('⚠️ 使用最后一个 part 作为文本');
         }
       }
       
       if (!text) {
+        console.error('❌ API 响应中没有找到优化后的文本内容');
         throw new Error('API 响应中没有找到优化后的文本内容');
       }
+      
+      // 日志：输出结果
+      console.log('=== 第一步：输出结果 ===');
+      console.log('优化后的文本长度:', text.length);
+      console.log('优化后的文本前500字符:', text.substring(0, 500));
+      console.log('优化后的文本后500字符:', text.substring(Math.max(0, text.length - 500)));
+      console.log('======================');
       
       return text.trim();
     }
