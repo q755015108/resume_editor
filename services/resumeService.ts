@@ -395,14 +395,32 @@ async function extractResumeFromText(
       let jsonText = text.trim();
       
       // 方法0: 完全移除 photo 字段（照片由用户上传，AI 返回的 photo 字段完全不需要）
-      // 使用最简单直接的方法：找到 "photo": 然后删除到下一个字段之前的所有内容
-      // 先处理完整的 photo 字段（有闭合引号和逗号）
-      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*"\s*,?\s*/g, '');
-      // 再处理被截断的 photo 字段（没有闭合引号，直接到 "items"）
-      jsonText = jsonText.replace(/"photo"\s*:\s*"https:[^"]*?(?=\s*"items")/g, '');
-      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|,|\n|\})/g, '');
-      // 最后处理任何剩余的 photo 字段
-      jsonText = jsonText.replace(/"photo"\s*:\s*[^,}\n]+/g, '');
+      // 处理各种格式的 photo 字段：
+      // 1. "photo": null, 或 "photo": null
+      // 2. "photo": "url", 或 "photo": "url"
+      // 3. "photo": "url（被截断）"
+      // 确保移除后不会留下多余的逗号
+      
+      // 先处理 "photo": null, 的情况（包括前后的逗号）
+      jsonText = jsonText.replace(/,\s*"photo"\s*:\s*null\s*,?/g, ',');  // 前面有逗号的情况
+      jsonText = jsonText.replace(/"photo"\s*:\s*null\s*,?\s*/g, '');   // 前面没有逗号的情况
+      
+      // 处理 "photo": "url", 的情况
+      jsonText = jsonText.replace(/,\s*"photo"\s*:\s*"[^"]*"\s*,?/g, ',');  // 前面有逗号的情况
+      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*"\s*,?\s*/g, '');   // 前面没有逗号的情况
+      
+      // 处理被截断的 photo 字段（没有闭合引号）
+      jsonText = jsonText.replace(/,\s*"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|\s*"name"|\s*"objective"|\s*,\s*"|,|\n|\})/g, ',');
+      jsonText = jsonText.replace(/"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|\s*"name"|\s*"objective"|\s*,\s*"|,|\n|\})/g, '');
+      
+      // 处理任何其他格式的 photo 字段
+      jsonText = jsonText.replace(/,\s*"photo"\s*:\s*[^,}\n]+\s*,?/g, ',');
+      jsonText = jsonText.replace(/"photo"\s*:\s*[^,}\n]+\s*,?\s*/g, '');
+      
+      // 清理可能出现的连续逗号（,,）
+      jsonText = jsonText.replace(/,\s*,/g, ',');
+      // 清理可能出现的逗号后直接跟 } 或 ]
+      jsonText = jsonText.replace(/,\s*([}\]])/g, '$1');
       
       // 方法1: 移除可能的 markdown 代码块标记
       jsonText = jsonText.replace(/^```json\s*/g, '');
@@ -538,9 +556,21 @@ async function extractResumeFromText(
           let fixedJson = jsonText;
           
           // 1. 完全移除 photo 字段（照片由用户上传，AI 返回的 photo 字段完全不需要）
-          fixedJson = fixedJson.replace(/"photo"\s*:\s*"[^"]*"\s*,?\s*/g, ''); // 完整的 photo 字段
-          fixedJson = fixedJson.replace(/"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|,|\n|\})/g, ''); // 被截断的 photo 字段
-          fixedJson = fixedJson.replace(/"photo"\s*:\s*[^,}\n]+\s*,?\s*/g, ''); // 任何其他格式的 photo 字段
+          // 处理 "photo": null, 的情况
+          fixedJson = fixedJson.replace(/,\s*"photo"\s*:\s*null\s*,?/g, ',');
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*null\s*,?\s*/g, '');
+          // 处理 "photo": "url", 的情况
+          fixedJson = fixedJson.replace(/,\s*"photo"\s*:\s*"[^"]*"\s*,?/g, ',');
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*"[^"]*"\s*,?\s*/g, '');
+          // 处理被截断的 photo 字段
+          fixedJson = fixedJson.replace(/,\s*"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|,|\n|\})/g, ',');
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*"[^"]*?(?=\s*"items"|\s*"pages"|,|\n|\})/g, '');
+          // 处理任何其他格式的 photo 字段
+          fixedJson = fixedJson.replace(/,\s*"photo"\s*:\s*[^,}\n]+\s*,?/g, ',');
+          fixedJson = fixedJson.replace(/"photo"\s*:\s*[^,}\n]+\s*,?\s*/g, '');
+          // 清理连续逗号和逗号后直接跟 } 或 ]
+          fixedJson = fixedJson.replace(/,\s*,/g, ',');
+          fixedJson = fixedJson.replace(/,\s*([}\]])/g, '$1');
           
           // 3. 移除所有控制字符（除了必要的空白字符）
           fixedJson = fixedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
