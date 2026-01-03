@@ -567,12 +567,12 @@ async function extractResumeFromText(
               // 构建一个最小可用的 JSON 结构
               result = {
                 personal: {
-                  name: jsonText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] || data.personal?.name || '姓名',
-                  objective: jsonText.match(/"objective"\s*:\s*"([^"]+)"/)?.[1] || data.personal?.objective || '',
-                  photo: jsonText.match(/"photo"\s*:\s*"([^"]+)"/)?.[1] || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop',
+                  name: jsonText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] || '姓名',
+                  objective: jsonText.match(/"objective"\s*:\s*"([^"]+)"/)?.[1] || '',
+                  photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop',
                   items: []
                 },
-                pages: data.pages || []
+                pages: []
               };
               
               // 尝试提取 items
@@ -593,7 +593,7 @@ async function extractResumeFromText(
                   const firstPageMatch = jsonText.match(/"pages"\s*:\s*\[\s*\{([\s\S]*?)\}\s*\]/);
                   if (firstPageMatch) {
                     // 这里可以进一步解析，但为了简单起见，先返回基本结构
-                    result.pages = data.pages || [{
+                    result.pages = [{
                       id: 'page-1',
                       sections: []
                     }];
@@ -614,11 +614,12 @@ async function extractResumeFromText(
           console.warn('⚠️ JSON 解析完全失败，返回空结构');
           result = {
             personal: {
-              ...data.personal,
-              name: jsonText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] || data.personal.name,
-              objective: jsonText.match(/"objective"\s*:\s*"([^"]+)"/)?.[1] || data.personal.objective
+              name: jsonText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] || '姓名',
+              objective: jsonText.match(/"objective"\s*:\s*"([^"]+)"/)?.[1] || '',
+              photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&h=320&auto=format&fit=crop',
+              items: []
             },
-            pages: data.pages || []
+            pages: []
           };
         }
       }
