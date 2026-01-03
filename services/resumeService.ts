@@ -121,16 +121,21 @@ async function extractResumeFromText(
   imagesBase64?: string[]
 ): Promise<any> {
   // 信息提取模式：从文本或图片中提取简历信息
-  const systemInstruction = `你是一个极其精准的简历信息提取引擎。请分析以下简历原始文本或图片，将其转换为 JSON 结构。
+  const systemInstruction = `你是一个极其精准的简历信息提取引擎。请仔细分析以下简历原始文本或图片，将其完整转换为 JSON 结构。
+
+⚠️ 重要：必须提取所有信息，不得遗漏任何内容！
 
 规则：
-1. 识别个人信息。注意：姓名(name)和求职意向(objective)是固定字段，其他信息（如电话、邮箱、出生地、生日等）请全部放入 items 数组中，每个项包含 id, label, value。
-2. 教育经历(education)：提取学校、专业、时间、GPA等。
-3. 工作/项目经历(experience)：必须包含 organization, role, period, summary 和 points (带有 subtitle 和 detail)。
-4. 必须输出合法 JSON，所有 ID 使用随机字符串。
-5. 严禁输出任何 Markdown 标签（如 \`\`\`json、**、# 等）。
-6. 严禁输出任何解释性文字、思考过程或注释。
-7. 只输出纯 JSON，第一行必须是 {，最后一行必须是 }。
+1. 识别个人信息。注意：姓名(name)和求职意向(objective)是固定字段，其他信息（如电话、邮箱、出生地、生日、语言能力、技能等）请全部放入 items 数组中，每个项包含 id, label, value。
+2. 教育经历(education)：必须提取所有教育经历，包括学校、专业、时间、GPA、课程等所有信息。
+3. 工作/项目经历(experience)：必须提取所有工作经历和项目经历，每个经历必须包含 organization, role, period, summary 和 points (带有 subtitle 和 detail)。必须包含所有工作内容和成果。
+4. 其他内容：如果简历中包含技能、证书、奖项、作品集、核心优势、自我评价等任何其他内容，请创建相应的 section（type 可以是 "custom"），确保所有信息都被提取。
+5. 多页简历：如果有多张图片，必须识别所有页面的内容，不得遗漏任何页面。
+6. 完整性要求：必须提取简历中的每一个信息点，包括但不限于：所有工作经历、所有项目经历、所有教育经历、所有技能、所有证书、所有奖项等。
+7. 必须输出合法 JSON，所有 ID 使用随机字符串。
+8. 严禁输出任何 Markdown 标签（如 \`\`\`json、**、# 等）。
+9. 严禁输出任何解释性文字、思考过程或注释。
+10. 只输出纯 JSON，第一行必须是 {，最后一行必须是 }。
 
 输出 JSON 结构参考：
 {
@@ -232,10 +237,24 @@ async function extractResumeFromText(
           // 构建文本提示（信息提取模式）
           let textPrompt = '';
           if (imagesBase64 && imagesBase64.length > 0) {
-            const pageHint = imagesBase64.length > 1 ? `（共 ${imagesBase64.length} 页，请识别所有页面内容）` : '';
-            textPrompt = `请识别图片中的简历内容${pageHint}，并按照规则提取并转换为 JSON 格式。${resumeText ? `\n\n补充信息：\n"""\n${resumeText}\n"""` : ''}`;
+            const pageHint = imagesBase64.length > 1 
+              ? `（共 ${imagesBase64.length} 页简历，请仔细识别所有页面的所有内容，包括每一页的工作经历、项目经历、教育背景、技能、证书、奖项等，不得遗漏任何信息）` 
+              : '（请仔细识别图片中的所有内容，包括工作经历、项目经历、教育背景、技能、证书、奖项等，不得遗漏任何信息）';
+            textPrompt = `请识别图片中的简历内容${pageHint}，并按照规则完整提取并转换为 JSON 格式。
+
+⚠️ 重要要求：
+- 必须提取所有页面的所有信息
+- 必须包含所有工作经历、项目经历、教育经历
+- 必须包含所有技能、证书、奖项、核心优势等内容
+- 不得遗漏任何信息点
+${resumeText ? `\n\n补充信息：\n"""\n${resumeText}\n"""` : ''}`;
           } else {
-            textPrompt = `文本内容：\n"""\n${resumeText}\n"""\n\n请按照规则提取并转换为 JSON 格式。`;
+            textPrompt = `文本内容：\n"""\n${resumeText}\n"""\n\n请按照规则完整提取并转换为 JSON 格式。
+
+⚠️ 重要要求：
+- 必须提取所有信息，包括所有工作经历、项目经历、教育经历
+- 必须包含所有技能、证书、奖项、核心优势等内容
+- 不得遗漏任何信息点`;
           }
           
           parts.push({
@@ -250,7 +269,7 @@ async function extractResumeFromText(
       temperature: 0.1,  // 降低温度，更严格遵循指令
       topP: 0.95,
       responseMimeType: 'application/json',  // 强制 JSON 格式
-      maxOutputTokens: 16384,  // 确保有足够空间输出完整 JSON
+      maxOutputTokens: 32768,  // 增加输出长度，确保能输出完整的简历信息（多页简历信息量大）
       thinkingBudget: 0  // 禁用思考过程，直接输出结果
     }
   };
